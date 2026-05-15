@@ -46,7 +46,7 @@ Example `.clasp.json`:
 4. Click **Add script property**
 5. Add two properties:
    - **Property**: `PARTS_SHEET_ID` → **Value**: [your Spreadsheet ID from Step 2]
-   - **Property**: `EXPORT_FOLDER_ID` → **Value**: `1esFQPqvwxIYRtpKrKm3BB6jPdZi3WPsk` (existing exports folder)
+   - **Property**: `EXPORT_FOLDER_ID` → **Value**: [ID of a Drive folder you own where exported cost sheets should land. Create the folder first in Drive and copy the ID from its URL.]
 
 ## Step 4: Authenticate clasp (2 min)
 
@@ -67,7 +67,8 @@ clasp push
 
 You should see:
 ```
-Pushed 4 files.
+Pushed 5 files.
+- appsscript.json
 - Code.gs
 - Calc.gs
 - Data.gs
@@ -80,8 +81,8 @@ Pushed 4 files.
 2. Click **Deploy** (top right)
 3. Click **New Deployment** (+ icon)
 4. **Type**: Select **Web app**
-5. **Execute as**: **Me** (the account owner)
-6. **Who has access**: **Anyone with Google login**
+5. **Execute as**: **User accessing the web app** (matches `executeAs: USER_ACCESSING` in appsscript.json)
+6. **Who has access**: **Anyone within [your Workspace domain]** (matches `access: DOMAIN` in appsscript.json — keeps the tool internal to your org)
 7. Click **Deploy**
 8. Copy the **Deployment URL** (looks like `https://script.google.com/macros/d/...`)
 9. Share this URL with your team
@@ -125,14 +126,22 @@ Pushed 4 files.
 - Sheet shows all parts with cost breakdown columns
 - ✓ Export works
 
-## Step 8: Update GitHub Issues (5 min)
+## Step 8: Troubleshooting
+
+- **Saved Parts list is empty after refresh** — `PARTS_SHEET_ID` is unset or points to a sheet without a "Parts Library" tab. Check Project Settings → Script Properties.
+- **Export button errors** — `EXPORT_FOLDER_ID` is unset or points to a folder you don't own. The script writes with `drive.file` scope, so it can only place files in folders you have access to.
+- **Total cost shows NaN** — A numeric input was cleared. Reset defaults or re-enter the field.
+- **"App not found" / access denied** — Web app is set to `DOMAIN` access; confirm the user opening the URL is signed in with a Workspace account in your domain.
+- **Server logs** — Run `clasp logs` locally, or open Executions in the Apps Script editor. Logger.log lines from `savePart` / `loadAllParts` / `deletePart` / `exportPartsToSheet` surface errors there.
+
+## Step 9: Update GitHub Issues (5 min)
 
 Go to [github.com/JelalG/should-cost-tool/issues](https://github.com/JelalG/should-cost-tool/issues)
 
 Close the issues as you verify them:
-- Issue #1 (Setup) → Mark as completed
-- Issue #2 (Calculations) → Close after test baseline
-- Issue #3 (Sheets Integration) → Close after test save/export
+- Issue #1 (Setup) → Mark as completed once `clasp push` works
+- Issue #2 (Calculations) → Close after baseline test passes
+- Issue #3 (Sheets Integration) → Close after save/load/export verified end-to-end
 - Issue #4 (UI Testing) → Close after all web app tests pass
 - Issue #5 (Production) → Leave open until everything is verified
 

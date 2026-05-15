@@ -13,6 +13,7 @@
 - **Calc.gs** - Core cost calculation logic, test with baseline values
 - **Code.gs** - Server functions for Spreadsheet I/O
 - **index.html** - Web UI, must include calcSC() mirror for client-side
+- **index.html** also contains an inline copy of `REGIONS`, `TONNAGE_BRACKETS`, and `calcSC` for client-side recalc. Any change to `Data.gs` or `Calc.gs` MUST be mirrored in the inline script block in `index.html` or the UI and the server will return different numbers.
 
 ## Making Changes
 

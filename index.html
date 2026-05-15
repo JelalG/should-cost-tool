@@ -641,13 +641,7 @@
 </div>
 
 <script>
-  // Global state
-  let state = { ...DEFAULTS };
-  let savedParts = [];
-  let selectedPartKeys = new Set();
-  let isSaving = false;
-
-  // Initialize DEFAULTS copy (from Data.gs)
+  // DEFAULTS (mirrors Data.gs) — declared before state so initialization is valid
   const DEFAULTS = {
     partNumber: 'PN-0001',
     partName: 'Sample Part',
@@ -670,6 +664,12 @@
     toolLife: 750000,
     cumulativeVolume: 0
   };
+
+  // Global state
+  let state = { ...DEFAULTS };
+  let savedParts = [];
+  let selectedPartKeys = new Set();
+  let isSaving = false;
 
   // Helper to run server functions
   function runServer(fn, ...args) {
@@ -908,18 +908,33 @@
     }
   }
 
-  // Render parts list
+  // Render parts list — builds DOM nodes (no innerHTML) so saved part names cannot inject HTML/JS.
   function renderPartsList() {
     const container = document.getElementById('parts-list');
-    container.innerHTML = savedParts.map(part => `
-      <div class="part-item">
-        <input type="checkbox" onchange="togglePartSelection('${part.key}', this.checked)">
-        <label class="part-item-label" onclick="loadPart('${part.key}')" style="cursor: pointer;">
-          ${part.partNumber || 'N/A'} - ${part.partName || 'Unnamed'}
-        </label>
-        <button class="part-item-delete" onclick="handleDeletePart('${part.key}')">Delete</button>
-      </div>
-    `).join('');
+    container.replaceChildren();
+    savedParts.forEach(part => {
+      const item = document.createElement('div');
+      item.className = 'part-item';
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = selectedPartKeys.has(part.key);
+      cb.addEventListener('change', (e) => togglePartSelection(part.key, e.target.checked));
+
+      const label = document.createElement('label');
+      label.className = 'part-item-label';
+      label.style.cursor = 'pointer';
+      label.textContent = (part.partNumber || 'N/A') + ' - ' + (part.partName || 'Unnamed');
+      label.addEventListener('click', () => loadPart(part.key));
+
+      const del = document.createElement('button');
+      del.className = 'part-item-delete';
+      del.textContent = 'Delete';
+      del.addEventListener('click', () => handleDeletePart(part.key));
+
+      item.append(cb, label, del);
+      container.appendChild(item);
+    });
   }
 
   // Load part into editor

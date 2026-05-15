@@ -54,8 +54,8 @@ A real-time injection molding should-cost calculator built with Google Apps Scri
    clasp push
    ```
    - In Apps Script Editor: Deploy → New Deployment → Web App
-   - Execute as: User accessing the web app
-   - Who has access: Anyone with Google login
+   - Execute as: User accessing the web app (matches `executeAs: USER_ACCESSING` in appsscript.json)
+   - Who has access: Anyone within your Google Workspace domain (matches `access: DOMAIN` in appsscript.json)
    - Copy Web App URL and share with team
 
 ## Development Workflow
@@ -95,19 +95,34 @@ After pushing:
 - **Code.gs**: Server functions for Sheets I/O, web app serving
 - **index.html**: Single-page UI with inline CSS/JS, mirrors Calc logic client-side
 
+## Server Function Contract
+
+Client (index.html) calls these via `google.script.run`:
+
+- `savePart(partJson: string) -> string` — Upserts a row in the "Parts Library" tab keyed by `buildSlug(partNumber, partName)`. Returns the slug.
+- `loadAllParts() -> string` — Returns JSON-stringified array of part inputs, sorted by partNumber then partName. Returns `"[]"` if `PARTS_SHEET_ID` unset.
+- `deletePart(key: string) -> boolean` — Deletes the row whose first cell matches `key`. Returns true if a row was removed.
+- `exportPartsToSheet(partsJson: string) -> string` — Creates a new Sheet in `EXPORT_FOLDER_ID` with one column per part and a fixed set of output rows. Returns the new spreadsheet URL.
+
+Both Sheet operations require the Script Properties `PARTS_SHEET_ID` and `EXPORT_FOLDER_ID`. Required OAuth scopes (appsscript.json): `spreadsheets`, `drive.file`, `script.external_request`.
+
+## Keeping calc in sync
+
+`index.html` contains an inline copy of `REGIONS`, `TONNAGE_BRACKETS`, and `calcSC` (roughly the second half of the inline script block) used for instant client-side recalc. Any change to `Data.gs` or `Calc.gs` MUST be mirrored there or the UI will silently disagree with the server.
+
 ## Cost Calculation
 
-The tool calculates should-cost in 7 steps:
+The tool calculates should-cost in 7 steps (see `Calc.gs`):
 
-1. **Machine Rate** - Resolve from tonnage bracket + regional multiplier
-2. **Material** - Resin cost (part + runner - regrind)
-3. **Machine** - Hourly rate ÷ parts per hour
-4. **Labor** - Direct ops + secondary ops
-5. **Overhead** - Direct + secondary labor × OH rate
-6. **SG&A & Margin** - Manufacturing base + duty + SG&A, apply margin
-7. **Tooling** - Amortize over tool life × cavities, zero out at paid-off
+1. **Machine Rate** — Tonnage bracket base $/hr × regional multiplier (or override)
+2. **Material** — (Part weight + runner weight × (1 - regrind rate)) × resin $/kg
+3. **Machine** — Hourly rate / parts per hour (cavities × utilization × 3600 / cycle)
+4. **Labor** — Direct labor + secondary-ops labor (laborRate × secOpsMin / 60)
+5. **Overhead, secondary machine, packaging, freight, duty, SG&A** — OH on labor, plus regional pkg + freight + duty + SG&A applied to the manufacturing subtotal
+6. **Margin** — Applied to (mfg subtotal + duty + SG&A) to produce base total
+7. **Tooling** — `toolingCost / (toolLife × cavities)`, zeroed when `cumulativeVolume` meets or exceeds `toolLife × cavities`
 
-Scrap rate applied independently to each layer.
+Scrap rate is applied independently to material, machine, labor, and tooling layers.
 
 ## Test Baseline
 
@@ -130,12 +145,16 @@ Input values:
 
 ## Regional Data
 
-| Region | Labor $/hr | Machine $ | OH % | SG&A % | Margin % |
-|--------|-----------|-----------|------|--------|----------|
-| USA | $28.50 | $32 (base) | 90% | 7% | 10% |
-| Mexico | $5.80 | $32 × 0.615 | 60% | 6% | 9% |
-| China | $7.20 | $32 × 0.538 | 65% | 7% | 8% |
-| Indonesia | $2.80 | $32 × 0.364 | 45% | 5% | 8% |
+Labor rates, overhead, SG&A, margin, packaging, freight, and duty are defined per region in `Data.gs`. Machine rate is resolved from a tonnage bracket (`Data.gs > TONNAGE_BRACKETS`) then multiplied by the region's multiplier.
+
+| Region    | Labor $/hr | Machine multiplier | OH % | SG&A % | Margin % | Duty % |
+|-----------|------------|--------------------|------|--------|----------|--------|
+| USA       | $28.50     | 1.000              | 90%  | 7%     | 10%      | 0%     |
+| Mexico    | $5.80      | 0.615              | 60%  | 6%     | 9%       | 0%     |
+| China     | $7.20      | 0.538              | 65%  | 7%     | 8%       | 25%    |
+| Indonesia | $2.80      | 0.364              | 45%  | 5%     | 8%       | 10%    |
+
+Tonnage brackets (USA base $/hr, multiplied by region multiplier): Micro ≤50t $32, Small ≤100t $42, Medium ≤200t $52, Large ≤400t $68, XL ≤700t $88, XXL ≤1000t $110, Giga >1000t $140.
 
 ## GitHub Issues
 
