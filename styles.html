@@ -871,6 +871,13 @@
       scroll-margin-top: 12px;
     }
     .formula-block:last-child { border-bottom: none; }
+    .anchor-flash {
+      animation: anchor-flash 1.1s ease-out;
+    }
+    @keyframes anchor-flash {
+      0%   { background-color: rgba(30, 77, 43, 0.18); }
+      100% { background-color: transparent; }
+    }
     .formula-block h4 {
       font-size: 12px;
       font-weight: 700;

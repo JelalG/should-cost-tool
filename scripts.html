@@ -573,6 +573,30 @@
     target.hidden = open;
   }
 
+  // Intercept in-page anchor clicks so they smooth-scroll instead of triggering
+  // a top-level navigation. Inside the Apps Script userCodeAppPanel iframe a
+  // native #fragment nav reloads the iframe to a blank sandbox URL (white
+  // screen). We also open any collapsed <details> ancestor (e.g. the
+  // methodology panel) so the target is actually visible after the jump.
+  function handleAnchorClick(e) {
+    const a = e.target.closest('a[href^="#"]');
+    if (!a) return;
+    const href = a.getAttribute('href');
+    if (!href || href === '#') return;
+    const id = href.slice(1);
+    const target = document.getElementById(id);
+    if (!target) return;
+    e.preventDefault();
+    let parent = target.parentElement;
+    while (parent) {
+      if (parent.tagName === 'DETAILS' && !parent.open) parent.open = true;
+      parent = parent.parentElement;
+    }
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    target.classList.add('anchor-flash');
+    setTimeout(() => target.classList.remove('anchor-flash'), 1200);
+  }
+
   // Recalculate outputs
   function recalculate() {
     // Sync input fields from state, but never overwrite the one the user is typing into —
@@ -1109,6 +1133,7 @@
     attachBlendListeners();
     const searchEl = document.getElementById('parts-search');
     if (searchEl) searchEl.addEventListener('input', renderPartsList);
+    document.addEventListener('click', handleAnchorClick);
     await Promise.all([loadPartsList(), loadBlendsList()]);
     recalculate();
     renderOutputs();
