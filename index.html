@@ -1631,7 +1631,17 @@
     if (!ok) return;
     try {
       await runServer('deletePart', key);
+      const wasViewing = state.key === key;
       await loadPartsList();
+      if (wasViewing) {
+        state = { ...DEFAULTS };
+        selectedPartKeys.delete(key);
+        recalculate();
+        renderOutputs();
+        updateToolBar();
+        updateBadges();
+        updateSaveButton();
+      }
       showToast('Part deleted');
     } catch (e) {
       showToast('Delete failed: ' + e.message, 'error');
