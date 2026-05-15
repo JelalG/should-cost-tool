@@ -49,6 +49,7 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     html, body { height: 100%; }
+    html { scroll-behavior: smooth; }
 
     body {
       font-family: var(--font-sans);
@@ -1188,46 +1189,110 @@
     <h3 class="panel-subheading">Detailed output</h3>
 
     <div id="output-table">
-      <div class="output-row is-total">
-        <div class="output-label">Total (with tooling)</div>
+      <div class="output-row is-total" id="row-total">
+        <div class="output-label">Total (with tooling)
+          <button type="button" class="formula-toggle" aria-expanded="false" aria-controls="formula-total" aria-label="Show formula" onclick="toggleFormula(this)">ⓘ</button>
+        </div>
         <div class="output-value">$<span id="out-total-with-tooling">0.0000</span></div>
       </div>
-      <div class="output-row">
-        <div class="output-label">Base (ex-tooling)</div>
+      <div class="formula-inline" id="formula-total" hidden>
+        <code>base + toolAmortPP</code>
+        <span class="note">Sum of base unit cost and per-part tooling amortization. <a href="#m-total">Details ↓</a></span>
+      </div>
+
+      <div class="output-row" id="row-base">
+        <div class="output-label">Base (ex-tooling)
+          <button type="button" class="formula-toggle" aria-expanded="false" aria-controls="formula-base" aria-label="Show formula" onclick="toggleFormula(this)">ⓘ</button>
+        </div>
         <div class="output-value">$<span id="out-base-total">0.0000</span></div>
       </div>
-      <div class="output-row">
-        <div class="output-label">Tooling amortization</div>
+      <div class="formula-inline" id="formula-base" hidden>
+        <code>(mfgSub + duty + sga) × (1 + margin)</code>
+        <span class="note">mfgSub = material + machine + labor + secMach + overhead + pkg + freight. <a href="#m-base">Details ↓</a></span>
+      </div>
+
+      <div class="output-row" id="row-tool">
+        <div class="output-label">Tooling amortization
+          <button type="button" class="formula-toggle" aria-expanded="false" aria-controls="formula-tool" aria-label="Show formula" onclick="toggleFormula(this)">ⓘ</button>
+        </div>
         <div class="output-value">$<span id="out-tool-amort">0.0000</span></div>
       </div>
-      <div class="output-row">
-        <div class="output-label">Resin cost</div>
+      <div class="formula-inline" id="formula-tool" hidden>
+        <code>toolingCost / (toolLife × cavities) × (1 + scrapRate)</code>
+        <span class="note">Zeroed once cumulativeVolume ≥ toolLife × cavities. <a href="#m-tool">Details ↓</a></span>
+      </div>
+
+      <div class="output-row" id="row-resin">
+        <div class="output-label">Resin cost
+          <button type="button" class="formula-toggle" aria-expanded="false" aria-controls="formula-resin" aria-label="Show formula" onclick="toggleFormula(this)">ⓘ</button>
+        </div>
         <div class="output-value">$<span id="out-resin">0.0000</span></div>
       </div>
-      <div class="output-row">
-        <div class="output-label">Processing cost</div>
+      <div class="formula-inline" id="formula-resin" hidden>
+        <code>(partWeightG + runnerG × (1 − regrindRate)) / 1000 × resinCostPerKg</code>
+        <span class="note">runnerG = partWeightG × runnerPct/100 unless overridden. <a href="#m-resin">Details ↓</a></span>
+      </div>
+
+      <div class="output-row" id="row-processing">
+        <div class="output-label">Processing cost
+          <button type="button" class="formula-toggle" aria-expanded="false" aria-controls="formula-processing" aria-label="Show formula" onclick="toggleFormula(this)">ⓘ</button>
+        </div>
         <div class="output-value">$<span id="out-processing">0.0000</span></div>
       </div>
-      <div class="output-row">
-        <div class="output-label">Scrap cost</div>
+      <div class="formula-inline" id="formula-processing" hidden>
+        <code>machineRate/pph + laborRate/pph + secLP + secMachPP</code>
+        <span class="note">pph = (3600 / cycleTime) × utilization × cavities. <a href="#m-processing">Details ↓</a></span>
+      </div>
+
+      <div class="output-row" id="row-scrap">
+        <div class="output-label">Scrap cost
+          <button type="button" class="formula-toggle" aria-expanded="false" aria-controls="formula-scrap" aria-label="Show formula" onclick="toggleFormula(this)">ⓘ</button>
+        </div>
         <div class="output-value">$<span id="out-scrap">0.0000</span></div>
       </div>
-      <div class="output-row">
-        <div class="output-label">Overhead cost</div>
+      <div class="formula-inline" id="formula-scrap" hidden>
+        <code>(resinPP + machinePP + directLP + secLP) × scrapRate</code>
+        <span class="note">Multiplicative on each cost bucket (not a parts-per-hr reduction). <a href="#m-scrap">Details ↓</a></span>
+      </div>
+
+      <div class="output-row" id="row-overhead">
+        <div class="output-label">Overhead cost
+          <button type="button" class="formula-toggle" aria-expanded="false" aria-controls="formula-overhead" aria-label="Show formula" onclick="toggleFormula(this)">ⓘ</button>
+        </div>
         <div class="output-value">$<span id="out-overhead">0.0000</span></div>
       </div>
-      <div class="output-row">
-        <div class="output-label">Profit</div>
+      <div class="formula-inline" id="formula-overhead" hidden>
+        <code>(directLP + secLP) × ohRate</code>
+        <span class="note">Applied to labor only — not machine. <a href="#m-overhead">Details ↓</a></span>
+      </div>
+
+      <div class="output-row" id="row-profit">
+        <div class="output-label">Profit
+          <button type="button" class="formula-toggle" aria-expanded="false" aria-controls="formula-profit" aria-label="Show formula" onclick="toggleFormula(this)">ⓘ</button>
+        </div>
         <div class="output-value">$<span id="out-profit">0.0000</span></div>
       </div>
+      <div class="formula-inline" id="formula-profit" hidden>
+        <code>(mfgSub + duty + sga) × marginRate</code>
+        <span class="note">Markup on landed cost before margin. <a href="#m-profit">Details ↓</a></span>
+      </div>
+
       <div class="output-row">
         <div class="output-label">Region</div>
         <div class="output-value"><span id="out-region">Mexico</span></div>
       </div>
-      <div class="output-row">
-        <div class="output-label">Machine rate ($/hr)</div>
+
+      <div class="output-row" id="row-machine">
+        <div class="output-label">Machine rate ($/hr)
+          <button type="button" class="formula-toggle" aria-expanded="false" aria-controls="formula-machine" aria-label="Show formula" onclick="toggleFormula(this)">ⓘ</button>
+        </div>
         <div class="output-value">$<span id="out-machine-rate">0.00</span></div>
       </div>
+      <div class="formula-inline" id="formula-machine" hidden>
+        <code>bracket.baseUSA × region.multiplier</code>
+        <span class="note">Overridden when machineRateOverride is set. <a href="#m-machine">Details ↓</a></span>
+      </div>
+
       <div class="output-row">
         <div class="output-label">Cavities</div>
         <div class="output-value"><span id="out-cavities">2</span></div>
@@ -1237,6 +1302,130 @@
         <div class="output-value"><span id="out-cycle-time">28</span></div>
       </div>
     </div>
+
+    <details class="methodology">
+      <summary>Methodology &amp; references</summary>
+      <div class="methodology-body">
+
+        <div class="formula-block" id="m-total">
+          <h4><a href="#row-total">↑ Total (with tooling)</a></h4>
+          <code>total = base + toolAmortPP</code>
+          <p>Final per-part cost. Tooling amortization is added on top of the marked-up base; once tooling is paid off it drops to zero and total = base.</p>
+          <ul class="refs">
+            <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L73" target="_blank" rel="noopener">Calc.gs — total assembly</a></li>
+          </ul>
+        </div>
+
+        <div class="formula-block" id="m-base">
+          <h4><a href="#row-base">↑ Base (ex-tooling)</a></h4>
+          <code>mfgSub = matTotal + machTotal + laborTotal + secMachPP + ohTotal + pkg + freight
+totalBeforeMargin = mfgSub × (1 + duty + sga)
+base = totalBeforeMargin × (1 + margin)</code>
+          <p>Standard cost waterfall: manufacturing subtotal → landed (duty + SG&amp;A) → marked-up. Duty and SG&amp;A both hit <code>mfgSub</code>, not each other.</p>
+          <ul class="refs">
+            <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L46-L62" target="_blank" rel="noopener">Calc.gs — base waterfall</a></li>
+            <li><a href="https://hts.usitc.gov/" target="_blank" rel="noopener">USITC Harmonized Tariff Schedule (duty lookup)</a></li>
+          </ul>
+        </div>
+
+        <div class="formula-block" id="m-tool">
+          <h4><a href="#row-tool">↑ Tooling amortization</a></h4>
+          <code>toolLifeParts = toolLife × cavities
+toolAmortRaw = cumulativeVolume ≥ toolLifeParts ? 0 : toolingCost / toolLifeParts
+toolAmortPP  = toolAmortRaw × (1 + scrapRate)</code>
+          <p>Even amortization across the tool's rated life in <em>shots</em>, multiplied by cavities to convert to parts. Scrap multiplier accounts for parts lost to defects.</p>
+          <ul class="refs">
+            <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L64-L70" target="_blank" rel="noopener">Calc.gs — tooling amortization</a></li>
+            <li><a href="https://www.ptonline.com/" target="_blank" rel="noopener">Plastics Technology — tooling cost &amp; mold life reference</a></li>
+          </ul>
+        </div>
+
+        <div class="formula-block" id="m-resin">
+          <h4><a href="#row-resin">↑ Resin cost</a></h4>
+          <code>runnerG = override ?? (partWeightG × runnerPct / 100)
+grossG  = partWeightG + runnerG × (1 − regrindRate)
+resinPP = (grossG / 1000) × resinCostPerKg</code>
+          <p>Net virgin resin per part = part weight plus the un-recycled portion of runner. <code>regrindRate</code> is the fraction of runner reground and reused; at 1.0 the runner is free, at 0.0 the full runner is consumed.</p>
+          <ul class="refs">
+            <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L15-L23" target="_blank" rel="noopener">Calc.gs — material cost</a></li>
+            <li><a href="https://www.theplasticsexchange.com/" target="_blank" rel="noopener">Plastics Exchange — spot resin pricing</a></li>
+          </ul>
+        </div>
+
+        <div class="formula-block" id="m-processing">
+          <h4><a href="#row-processing">↑ Processing cost</a></h4>
+          <code>pph        = (3600 / cycleTimeSec) × utilization × cavities
+machinePP  = machineRate / pph
+directLP   = laborRate / pph
+secLP      = laborRate × (secOpsMin / 60)
+secMachPP  = secMachineRate × (secOpsMin / 60)
+processing = machinePP + directLP + secLP + secMachPP</code>
+          <p>Parts/hr drives machine and direct labor; secondary ops add a flat per-part time. Utilization defaults to 0.85 — accounts for changeovers, breaks, and minor stoppages.</p>
+          <ul class="refs">
+            <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L25-L42" target="_blank" rel="noopener">Calc.gs — machine &amp; labor</a></li>
+            <li><a href="https://www.bls.gov/oes/current/oes513011.htm" target="_blank" rel="noopener">US BLS — molding operator wages (OES 51-3011)</a></li>
+          </ul>
+        </div>
+
+        <div class="formula-block" id="m-scrap">
+          <h4><a href="#row-scrap">↑ Scrap cost</a></h4>
+          <code>matScrap   = resinPP × scrapRate
+machScrap  = machinePP × scrapRate
+laborScrap = (directLP + secLP) × scrapRate
+scrap      = matScrap + machScrap + laborScrap</code>
+          <p>Modeled as a multiplicative uplift on each cost bucket. Note: this is slightly looser than the textbook approach of <code>pph × (1 − scrapRate)</code> good parts; results are within ~1% for scrap &lt; 5%.</p>
+          <ul class="refs">
+            <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L21-L37" target="_blank" rel="noopener">Calc.gs — scrap multipliers</a></li>
+          </ul>
+        </div>
+
+        <div class="formula-block" id="m-overhead">
+          <h4><a href="#row-overhead">↑ Overhead cost</a></h4>
+          <code>ohRate  = override/100 ?? region.ohRate
+ohTotal = (directLP + secLP) × ohRate</code>
+          <p>Labor-based overhead burden — <em>not</em> applied to machine cost. If <code>ohRate</code> represents a plant-wide overhead, this will under-allocate to machine-heavy parts vs. a full conversion-cost basis.</p>
+          <ul class="refs">
+            <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L41-L45" target="_blank" rel="noopener">Calc.gs — overhead</a></li>
+          </ul>
+        </div>
+
+        <div class="formula-block" id="m-profit">
+          <h4><a href="#row-profit">↑ Profit (contribution margin)</a></h4>
+          <code>marginRate = override/100 ?? region.marginRate
+profit     = (mfgSub + duty + sga) × marginRate</code>
+          <p>Margin applied to landed cost. Region defaults: USA 10%, Mexico 9%, China 8%, Indonesia 8%.</p>
+          <ul class="refs">
+            <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L54-L62" target="_blank" rel="noopener">Calc.gs — margin</a></li>
+          </ul>
+        </div>
+
+        <div class="formula-block" id="m-machine">
+          <h4><a href="#row-machine">↑ Machine rate ($/hr)</a></h4>
+          <code>bracket  = first { tonnage ≤ maxTons } in TONNAGE_BRACKETS
+machRate = override ?? (bracket.baseUSA × region.multiplier)</code>
+          <p>Tonnage brackets (baseUSA $/hr): 50t→$32, 100t→$42, 200t→$52, 400t→$68, 700t→$88, 1000t→$110, &gt;1000t→$140. Region multipliers: USA 1.00, Mexico 0.615, China 0.538, Indonesia 0.364.</p>
+          <ul class="refs">
+            <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Data.gs#L54-L62" target="_blank" rel="noopener">Data.gs — tonnage brackets</a></li>
+            <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Data.gs#L3-L52" target="_blank" rel="noopener">Data.gs — region multipliers</a></li>
+          </ul>
+        </div>
+
+        <div class="formula-block" id="m-constants">
+          <h4>Region constants reference</h4>
+          <code>USA      labor $28.50  oh 90%  margin 10%  duty 0%   pkg $0.08  freight $0.04  mult 1.000
+Mexico   labor $5.80   oh 60%  margin 9%   duty 0%   pkg $0.07  freight $0.08  mult 0.615
+China    labor $7.20   oh 65%  margin 8%   duty 25%  pkg $0.06  freight $0.18  mult 0.538
+Indonesia labor $2.80  oh 45%  margin 8%   duty 10%  pkg $0.06  freight $0.22  mult 0.364</code>
+          <p>Labor rates are fully-burdened $/hr. Duty assumes Section 301 list for China; revisit if HTS code carries a different rate.</p>
+          <ul class="refs">
+            <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Data.gs" target="_blank" rel="noopener">Data.gs — full region table</a></li>
+            <li><a href="https://hts.usitc.gov/" target="_blank" rel="noopener">USITC HTS lookup</a></li>
+            <li><a href="https://www.bls.gov/oes/" target="_blank" rel="noopener">US BLS Occupational Employment Statistics</a></li>
+          </ul>
+        </div>
+
+      </div>
+    </details>
   </div>
   </div>
 </div>
@@ -1393,6 +1582,15 @@
     results._toolPctUsed = Math.min((inp.cumulativeVolume / toolLifeParts) * 100, 100);
 
     return results;
+  }
+
+  // Toggle inline formula rows beneath an output row
+  function toggleFormula(btn) {
+    const target = document.getElementById(btn.getAttribute('aria-controls'));
+    if (!target) return;
+    const open = btn.getAttribute('aria-expanded') === 'true';
+    btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+    target.hidden = open;
   }
 
   // Recalculate outputs
