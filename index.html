@@ -80,6 +80,15 @@
       display: block;
     }
 
+    .input-help {
+      font-size: 11px;
+      color: #777;
+      font-weight: 400;
+      line-height: 1.3;
+      display: block;
+      margin: 4px 0 0;
+    }
+
     .input-field {
       width: 100%;
       padding: 8px 10px;
@@ -385,41 +394,49 @@
           <div class="input-group">
             <label class="input-label">Part Number</label>
             <input class="input-field" type="text" id="partNumber" placeholder="PN-0001">
+            <span class="input-help">Internal SKU / PN used to identify the part.</span>
           </div>
           <div class="input-group">
             <label class="input-label">Part Name</label>
             <input class="input-field" type="text" id="partName" placeholder="Sample Part">
+            <span class="input-help">Friendly name shown in the saved parts list.</span>
           </div>
         </div>
         <div class="input-row">
           <div class="input-group">
             <label class="input-label">Region</label>
             <select id="region">
+              <option value="">— select —</option>
               <option>USA</option>
               <option>Mexico</option>
               <option>China</option>
               <option>Indonesia</option>
             </select>
+            <span class="input-help">Where the part is molded — sets labor, overhead, duty, and freight defaults.</span>
           </div>
         </div>
         <div class="input-row">
           <div class="input-group">
             <label class="input-label">Cavities</label>
             <input class="input-field" type="number" id="cavities" min="1" value="2">
+            <span class="input-help">Number of parts produced per shot (mold cavities).</span>
           </div>
           <div class="input-group">
             <label class="input-label">Cycle Time (sec)</label>
             <input class="input-field" type="number" id="cycleTimeSec" step="0.1" value="28">
+            <span class="input-help">Total seconds per shot (close → fill → cool → eject).</span>
           </div>
           <div class="input-group">
-            <label class="input-label">Utilization %</label>
+            <label class="input-label">Utilization</label>
             <input class="input-field" type="number" id="utilization" step="0.01" min="0" max="1" value="0.85">
+            <span class="input-help">Fraction of time the press actually runs. 0–1 (e.g. 0.85 = 85%).</span>
           </div>
         </div>
         <div class="input-row">
           <div class="input-group">
-            <label class="input-label">Scrap Rate %</label>
+            <label class="input-label">Scrap Rate</label>
             <input class="input-field" type="number" id="scrapRate" step="0.01" min="0" max="1" value="0.02">
+            <span class="input-help">Fraction of parts scrapped. 0–1 (e.g. 0.02 = 2%).</span>
           </div>
         </div>
       </div>
@@ -435,26 +452,31 @@
           <div class="input-group">
             <label class="input-label">Part Weight (g)</label>
             <input class="input-field" type="number" id="partWeightG" step="0.1" value="85">
+            <span class="input-help">Net weight of one finished part, in grams.</span>
           </div>
           <div class="input-group">
             <label class="input-label">Runner %</label>
             <input class="input-field" type="number" id="runnerPct" step="0.1" value="14">
+            <span class="input-help">Runner/sprue weight as a percent of part weight (e.g. 14 = 14%).</span>
           </div>
         </div>
         <div class="input-row">
           <div class="input-group">
             <label class="input-label">Runner Override (g)</label>
             <input class="input-field" type="number" id="runnerWeightOverride" step="0.1" placeholder="Leave blank for auto">
+            <span class="input-help">Enter a measured runner weight to override the Runner % above.</span>
           </div>
         </div>
         <div class="input-row">
           <div class="input-group">
             <label class="input-label">Regrind Rate</label>
             <input class="input-field" type="number" id="regrindRate" step="0.01" min="0" max="1" value="0.30">
+            <span class="input-help">Share of runner that gets reground and reused. 0–1 (e.g. 0.30 = 30%).</span>
           </div>
           <div class="input-group">
             <label class="input-label">Resin Cost ($/kg)</label>
             <input class="input-field" type="number" id="resinCostPerKg" step="0.01" value="2.98">
+            <span class="input-help">Material price per kilogram of resin.</span>
           </div>
         </div>
       </div>
@@ -470,12 +492,14 @@
           <div class="input-group">
             <label class="input-label">Tonnage</label>
             <input class="input-field" type="number" id="tonnage" step="1" value="250">
+            <span class="input-help">Press clamp force in tons — picks the machine $/hr bracket.</span>
           </div>
         </div>
         <div class="input-row">
           <div class="input-group">
             <label class="input-label">Machine Rate Override ($/hr)</label>
             <input class="input-field" type="number" id="machineRateOverride" step="0.1" placeholder="Leave blank for auto">
+            <span class="input-help">Type a $/hr rate to override the region + tonnage default.</span>
           </div>
         </div>
         <div id="machine-rate-badge" class="override-badge default">default: auto-resolved</div>
@@ -492,6 +516,7 @@
           <div class="input-group">
             <label class="input-label">Labor Rate Override ($/hr)</label>
             <input class="input-field" type="number" id="laborRateOverride" step="0.01" placeholder="Leave blank for regional default">
+            <span class="input-help">Type a $/hr labor rate to override the regional default.</span>
           </div>
         </div>
         <div id="labor-rate-badge" class="override-badge default">default: regional rate</div>
@@ -499,6 +524,7 @@
           <div class="input-group">
             <label class="input-label">OH Rate Override %</label>
             <input class="input-field" type="number" id="ohRateOverride" step="0.1" placeholder="Leave blank for regional default">
+            <span class="input-help">Overhead as a percent of direct labor (e.g. 90 = 90%).</span>
           </div>
         </div>
         <div id="oh-rate-badge" class="override-badge default">default: regional rate</div>
@@ -515,6 +541,7 @@
           <div class="input-group">
             <label class="input-label">Margin Rate Override %</label>
             <input class="input-field" type="number" id="marginRateOverride" step="0.1" placeholder="Leave blank for regional default">
+            <span class="input-help">Contribution margin added on top, as a percent (e.g. 10 = 10%).</span>
           </div>
         </div>
         <div id="margin-rate-badge" class="override-badge default">default: regional margin</div>
@@ -531,16 +558,19 @@
           <div class="input-group">
             <label class="input-label">Tooling Cost ($)</label>
             <input class="input-field" type="number" id="toolingCost" step="1" value="85000">
+            <span class="input-help">One-time mold cost to amortize across parts produced.</span>
           </div>
           <div class="input-group">
             <label class="input-label">Tool Life (shots)</label>
             <input class="input-field" type="number" id="toolLife" step="1" value="750000">
+            <span class="input-help">Shots the tool can run before retirement (× cavities = total parts).</span>
           </div>
         </div>
         <div class="input-row">
           <div class="input-group">
             <label class="input-label">Cumulative Volume</label>
             <input class="input-field" type="number" id="cumulativeVolume" step="1" min="0" value="0">
+            <span class="input-help">Parts already produced. Once it hits tool life, tooling cost drops to $0/pc.</span>
           </div>
         </div>
         <div class="tool-bar-container">
@@ -791,37 +821,71 @@
     });
   }
 
+  // Fields required for a meaningful calc; if any are blank, outputs show "—".
+  const REQUIRED_FOR_CALC = ['region', 'partWeightG', 'runnerPct', 'regrindRate', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'toolingCost', 'toolLife', 'cumulativeVolume'];
+
+  function isCalcReady(s) {
+    return REQUIRED_FOR_CALC.every(k => {
+      const v = s[k];
+      if (v === null || v === undefined || v === '') return false;
+      if (k === 'region') return true;
+      return !isNaN(Number(v));
+    });
+  }
+
+  function fmt(n, decimals) {
+    return (typeof n === 'number' && isFinite(n)) ? n.toFixed(decimals) : '—';
+  }
+
   // Render output cards and table
   function renderOutputs() {
+    if (!isCalcReady(state)) {
+      ['total-with-tooling', 'base-total', 'tool-amort', 'resin-cost', 'processing-cost', 'profit',
+       'out-total-with-tooling', 'out-base-total', 'out-tool-amort', 'out-resin', 'out-processing',
+       'out-scrap', 'out-overhead', 'out-profit', 'out-machine-rate']
+        .forEach(id => { document.getElementById(id).textContent = '—'; });
+      document.getElementById('out-region').textContent = state.region || '—';
+      document.getElementById('out-cavities').textContent = state.cavities ?? '—';
+      document.getElementById('out-cycle-time').textContent = state.cycleTimeSec ?? '—';
+      return;
+    }
+
     const result = calcSC(state);
 
-    document.getElementById('total-with-tooling').textContent = result._totalWithTooling.toFixed(4);
-    document.getElementById('base-total').textContent = result._baseTotal.toFixed(4);
-    document.getElementById('tool-amort').textContent = result._toolAmortPP.toFixed(4);
-    document.getElementById('resin-cost').textContent = result.resinCostPerPart.toFixed(4);
-    document.getElementById('processing-cost').textContent = result.processingCostPerPart.toFixed(4);
-    document.getElementById('profit').textContent = result.profit.toFixed(4);
+    document.getElementById('total-with-tooling').textContent = fmt(result._totalWithTooling, 4);
+    document.getElementById('base-total').textContent = fmt(result._baseTotal, 4);
+    document.getElementById('tool-amort').textContent = fmt(result._toolAmortPP, 4);
+    document.getElementById('resin-cost').textContent = fmt(result.resinCostPerPart, 4);
+    document.getElementById('processing-cost').textContent = fmt(result.processingCostPerPart, 4);
+    document.getElementById('profit').textContent = fmt(result.profit, 4);
 
-    document.getElementById('out-total-with-tooling').textContent = result._totalWithTooling.toFixed(4);
-    document.getElementById('out-base-total').textContent = result._baseTotal.toFixed(4);
-    document.getElementById('out-tool-amort').textContent = result._toolAmortPP.toFixed(4);
-    document.getElementById('out-resin').textContent = result.resinCostPerPart.toFixed(4);
-    document.getElementById('out-processing').textContent = result.processingCostPerPart.toFixed(4);
-    document.getElementById('out-scrap').textContent = result.scrapCostPerPart.toFixed(4);
-    document.getElementById('out-overhead').textContent = result.overheadCostPerPart.toFixed(4);
-    document.getElementById('out-profit').textContent = result.profit.toFixed(4);
+    document.getElementById('out-total-with-tooling').textContent = fmt(result._totalWithTooling, 4);
+    document.getElementById('out-base-total').textContent = fmt(result._baseTotal, 4);
+    document.getElementById('out-tool-amort').textContent = fmt(result._toolAmortPP, 4);
+    document.getElementById('out-resin').textContent = fmt(result.resinCostPerPart, 4);
+    document.getElementById('out-processing').textContent = fmt(result.processingCostPerPart, 4);
+    document.getElementById('out-scrap').textContent = fmt(result.scrapCostPerPart, 4);
+    document.getElementById('out-overhead').textContent = fmt(result.overheadCostPerPart, 4);
+    document.getElementById('out-profit').textContent = fmt(result.profit, 4);
     document.getElementById('out-region').textContent = state.region;
-    document.getElementById('out-machine-rate').textContent = result._machineRate.toFixed(2);
+    document.getElementById('out-machine-rate').textContent = fmt(result._machineRate, 2);
     document.getElementById('out-cavities').textContent = state.cavities;
     document.getElementById('out-cycle-time').textContent = state.cycleTimeSec;
   }
 
   // Update tooling progress bar
   function updateToolBar() {
-    const result = calcSC(state);
     const fill = document.getElementById('tool-bar-fill');
     const label = document.getElementById('tool-bar-label');
 
+    if (!isCalcReady(state)) {
+      fill.style.width = '0%';
+      fill.style.background = '#38761D';
+      label.textContent = '';
+      return;
+    }
+
+    const result = calcSC(state);
     fill.style.width = result._toolPctUsed + '%';
     fill.style.background = result._toolPaidOff ? '#A32D2D' : (result._toolPctUsed > 75 ? '#BA7517' : '#38761D');
     label.textContent = result._toolPaidOff ? 'Tool fully amortized — tooling cost = $0/pc' : ((result._toolLifeParts - state.cumulativeVolume).toLocaleString()) + ' parts remaining on tool';
@@ -864,7 +928,10 @@
     document.getElementById('marginRateOverride').className = state.marginRateOverride ? 'input-field override' : 'input-field';
   }
 
-  // Reset section to defaults
+  // Fields that are text (cleared to '') vs numbers (cleared to null).
+  const TEXT_FIELDS = new Set(['partNumber', 'partName', 'region']);
+
+  // Reset section to blank — numeric inputs go null, text inputs go ''.
   function resetSection(section) {
     const resetMap = {
       part: ['partNumber', 'partName', 'region', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate'],
@@ -877,7 +944,7 @@
     const keys = resetMap[section] || [];
     const patch = {};
     keys.forEach(key => {
-      patch[key] = DEFAULTS[key];
+      patch[key] = TEXT_FIELDS.has(key) ? '' : null;
     });
     setState(patch);
   }
