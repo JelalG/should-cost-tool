@@ -6,13 +6,13 @@
     partName: '',
     region: '',
     partWeightG: null,
-    runnerPct: null,
+    runnerPct: 14,
     runnerWeightOverride: null,
-    regrindRate: null,
+    regrindRate: 0.30,
     cavities: null,
     cycleTimeSec: null,
     utilization: null,
-    scrapRate: null,
+    scrapRate: 0.02,
     resinCostPerKg: null,
     tonnage: null,
     machineRateOverride: null,
@@ -702,7 +702,8 @@
   // Fields that are text (cleared to '') vs numbers (cleared to null).
   const TEXT_FIELDS = new Set(['partNumber', 'partName', 'region']);
 
-  // Reset section to blank — numeric inputs go null, text inputs go ''.
+  // Reset section to blank — numeric inputs go null (or back to their DEFAULTS
+  // industry-standard value if one is set), text inputs go ''.
   // The 'auto' reset also flips autoEstimate off so the four target fields unlock.
   function resetSection(section) {
     const resetMap = {
@@ -717,7 +718,8 @@
     const keys = resetMap[section] || [];
     const patch = {};
     keys.forEach(key => {
-      patch[key] = TEXT_FIELDS.has(key) ? '' : null;
+      if (TEXT_FIELDS.has(key)) patch[key] = '';
+      else patch[key] = DEFAULTS[key] !== undefined ? DEFAULTS[key] : null;
     });
     if (section === 'auto') patch.autoEstimate = false;
     if (section === 'resin') patch.resinBlend = null;
