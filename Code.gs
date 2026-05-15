@@ -53,7 +53,9 @@ function rowToInp(header, row) {
     let val = row[idx];
     if (key === 'key') {
       inp.key = val;
-    } else if (['partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'machineRateOverride', 'laborRateOverride', 'ohRateOverride', 'marginRateOverride', 'toolingCost', 'toolLife', 'cumulativeVolume'].includes(key)) {
+    } else if (key === 'autoEstimate') {
+      inp.autoEstimate = (val === true || val === 'true' || val === 'TRUE' || val === 1 || val === '1');
+    } else if (['partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'machineRateOverride', 'laborRateOverride', 'ohRateOverride', 'marginRateOverride', 'toolingCost', 'toolLife', 'cumulativeVolume', 'wallThicknessMm', 'annualVolume'].includes(key)) {
       inp[key] = val === '' ? null : parseFloat(val);
     } else {
       inp[key] = val;

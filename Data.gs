@@ -81,7 +81,10 @@ const DEFAULTS = {
   marginRateOverride: null,
   toolingCost: 85000,
   toolLife: 750000,
-  cumulativeVolume: 0
+  cumulativeVolume: 0,
+  wallThicknessMm: null,
+  annualVolume: null,
+  autoEstimate: false
 };
 
 const FIELD_KEYS = [
@@ -89,7 +92,7 @@ const FIELD_KEYS = [
   'runnerWeightOverride', 'regrindRate', 'cavities', 'cycleTimeSec',
   'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'machineRateOverride',
   'laborRateOverride', 'ohRateOverride', 'marginRateOverride', 'toolingCost',
-  'toolLife', 'cumulativeVolume'
+  'toolLife', 'cumulativeVolume', 'wallThicknessMm', 'annualVolume', 'autoEstimate'
 ];
 
 // Helper to get region object

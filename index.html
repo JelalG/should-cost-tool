@@ -45,6 +45,33 @@
       </div>
     </div>
 
+    <div id="auto-estimate-section">
+      <div class="section-header">
+        <span class="section-header-label">Auto-estimate (optional)</span>
+        <button class="reset-btn" onclick="resetSection('auto')">Reset</button>
+      </div>
+      <div class="section-body">
+        <label class="toggle-row" for="autoEstimate">
+          <input type="checkbox" id="autoEstimate">
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          <span class="toggle-label">Auto-fill cavities, cycle time, utilization &amp; tonnage</span>
+        </label>
+        <span class="input-help" style="margin-top: 8px;">Provide wall thickness and annual volume to derive the four fields below. Leave off to enter them manually.</span>
+        <div class="input-row" style="margin-top: 12px;">
+          <div class="input-group">
+            <label class="input-label">Nominal Wall Thickness (mm)</label>
+            <input class="input-field" type="number" id="wallThicknessMm" min="0" step="any" inputmode="decimal" placeholder="e.g. 2.0">
+            <span class="input-help">Average wall — drives cooling time (cycle ≈ 5 + 2.5 × wall²).</span>
+          </div>
+          <div class="input-group">
+            <label class="input-label">Annual Volume (parts/yr)</label>
+            <input class="input-field" type="number" id="annualVolume" min="0" step="1" inputmode="numeric" placeholder="e.g. 500000">
+            <span class="input-help">Yearly demand — drives cavity selection (targets ~4,000 hr/yr per tool).</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="part-process-section">
       <div class="section-header">
         <span class="section-header-label">Part &amp; process</span>
@@ -78,17 +105,17 @@
         </div>
         <div class="input-row">
           <div class="input-group">
-            <label class="input-label">Cavities</label>
+            <label class="input-label">Cavities <span class="auto-badge" data-auto-for="cavities" hidden>auto</span></label>
             <input class="input-field" type="number" id="cavities" min="1" step="1" inputmode="numeric" value="2">
             <span class="input-help">Number of parts produced per shot (mold cavities).</span>
           </div>
           <div class="input-group">
-            <label class="input-label">Cycle Time (sec)</label>
+            <label class="input-label">Cycle Time (sec) <span class="auto-badge" data-auto-for="cycleTimeSec" hidden>auto</span></label>
             <input class="input-field" type="number" id="cycleTimeSec" min="0" step="any" inputmode="decimal" value="28">
             <span class="input-help">Total seconds per shot (close → fill → cool → eject).</span>
           </div>
           <div class="input-group">
-            <label class="input-label">Utilization</label>
+            <label class="input-label">Utilization <span class="auto-badge" data-auto-for="utilization" hidden>auto</span></label>
             <input class="input-field" type="number" id="utilization" min="0" max="1" step="any" inputmode="decimal" value="0.85">
             <span class="input-help">Fraction of time the press actually runs. 0–1 (e.g. 0.85 = 85%).</span>
           </div>
@@ -151,7 +178,7 @@
       <div class="section-body">
         <div class="input-row">
           <div class="input-group">
-            <label class="input-label">Tonnage</label>
+            <label class="input-label">Tonnage <span class="auto-badge" data-auto-for="tonnage" hidden>auto</span></label>
             <input class="input-field" type="number" id="tonnage" min="0" step="1" inputmode="numeric" value="250">
             <span class="input-help">Press clamp force in tons — picks the machine $/hr bracket.</span>
           </div>
@@ -515,6 +542,17 @@
             <span class="formula-line"><var>machRate</var><span class="eq">=</span><var>machineRateOverride</var><span class="cond">if set, else</span><span class="prop"><var>bracket</var><span class="dot">.</span><var>baseUSA</var></span><span class="op">×</span><span class="prop"><var>region</var><span class="dot">.</span><var>multiplier</var></span></span>
           </div>
           <p>Tonnage brackets (<var>baseUSA</var> $/hr): 50t→$32, 100t→$42, 200t→$52, 400t→$68, 700t→$88, 1000t→$110, &gt;1000t→$140. Region multipliers: USA 1.00, Mexico 0.615, China 0.538, Indonesia 0.364.</p>
+        </div>
+
+        <div class="formula-block" id="m-auto">
+          <h4>Auto-estimate (cavities, cycle, utilization, tonnage)</h4>
+          <div class="formula-display">
+            <span class="formula-line"><var>utilization</var><span class="eq">=</span><span class="num">0.85</span></span>
+            <span class="formula-line"><var>cycleTimeSec</var><span class="eq">=</span><span class="num">5</span><span class="op">+</span><span class="num">2.5</span><span class="op">×</span><var>wall</var><span class="op">²</span></span>
+            <span class="formula-line"><var>cavities</var><span class="eq">=</span>snap<span class="paren">(</span><span class="frac"><span class="num-top"><var>annualVolume</var><span class="op">×</span><var>cycleTimeSec</var></span><span class="num-bot"><span class="num">3600</span><span class="op">×</span><var>utilization</var><span class="op">×</span><span class="num">4000</span></span></span><span class="paren">)</span></span>
+            <span class="formula-line"><var>tonnage</var><span class="eq">=</span>snap<span class="paren">(</span><var>partWeightG</var><span class="op">×</span><var>cavities</var><span class="op">×</span><span class="paren">(</span><span class="num">1</span><span class="op">+</span><var>runnerPct</var><span class="op">÷</span><span class="num">100</span><span class="paren">)</span><span class="paren">)</span></span>
+          </div>
+          <p>Cycle time follows the standard cooling-time approximation (cooling ∝ wall²) plus ~5s fill/eject. Cavities sizes the tool to produce <var>annualVolume</var> parts in a 4,000 hr/yr production window. Tonnage uses the ~1 t/g shot-weight rule of thumb. All four snap to common molding values: cavities ∈ {1, 2, 4, 6, 8, 12, 16, 24, 32, 48, 64}, tonnage ∈ {50, 100, 200, 400, 700, 1000, 1500}. Confidence: ±15% on cycle time, ±1 cavity step on cavities, ±1 bracket on tonnage. Always validate against a quote when stakes are material.</p>
         </div>
 
         <div class="formula-block" id="m-constants">

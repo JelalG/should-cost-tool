@@ -21,8 +21,47 @@
     marginRateOverride: null,
     toolingCost: null,
     toolLife: null,
-    cumulativeVolume: null
+    cumulativeVolume: null,
+    wallThicknessMm: null,
+    annualVolume: null,
+    autoEstimate: false
   };
+
+  // Auto-estimate constants — see methodology block #m-auto for derivations.
+  const AUTO_TARGET_HOURS = 4000;       // production hours/yr per tool
+  const AUTO_UTILIZATION  = 0.85;       // industry-standard utilization default
+  const AUTO_COOLING_K    = 2.5;        // cooling-time coefficient (s/mm²) for typical commodity resins
+  const AUTO_OVERHEAD_S   = 5;          // fill + eject overhead (s)
+  const AUTO_CLAMP_T_PER_G = 1.0;       // rough rule of thumb: 1 ton per gram of shot weight
+  const CAVITY_STEPS = [1, 2, 4, 6, 8, 12, 16, 24, 32, 48, 64];
+  const TONNAGE_STEPS = [50, 100, 200, 400, 700, 1000, 1500];
+  const AUTO_FIELDS = ['cavities', 'cycleTimeSec', 'utilization', 'tonnage'];
+
+  // Derive cavities, cycle time, utilization, and tonnage from wall thickness +
+  // annual volume + part weight + runner %. Returns null when prerequisites
+  // are missing so the caller can fall back to manual values.
+  function computeAutoEstimates(s) {
+    const wall = s.wallThicknessMm;
+    const annual = s.annualVolume;
+    if (!(wall > 0) || !(annual > 0)) return null;
+
+    const utilization = AUTO_UTILIZATION;
+    const cycleTimeSec = +(AUTO_OVERHEAD_S + AUTO_COOLING_K * wall * wall).toFixed(1);
+
+    const partsPerHrPerCav = (3600 / cycleTimeSec) * utilization;
+    const cavRaw = annual / (partsPerHrPerCav * AUTO_TARGET_HOURS);
+    const cavities = CAVITY_STEPS.find(c => c >= cavRaw) || CAVITY_STEPS[CAVITY_STEPS.length - 1];
+
+    const out = { utilization, cycleTimeSec, cavities };
+
+    const pw = s.partWeightG, rp = s.runnerPct;
+    if (pw > 0 && rp !== null && rp !== undefined && rp >= 0) {
+      const shotG = pw * cavities * (1 + rp / 100);
+      const tonRaw = shotG * AUTO_CLAMP_T_PER_G;
+      out.tonnage = TONNAGE_STEPS.find(t => t >= tonRaw) || TONNAGE_STEPS[TONNAGE_STEPS.length - 1];
+    }
+    return out;
+  }
 
   // Global state
   let state = { ...DEFAULTS };
@@ -40,18 +79,41 @@
     });
   }
 
-  // Update state and recalculate
+  // Update state and recalculate. When auto-estimate is on and prerequisites are
+  // present, derive cavities/cycle/util/tonnage from wall thickness + annual volume
+  // before recalc so the cost output reflects the derived values.
   function setState(patch) {
-    state = { ...state, ...patch };
+    let next = { ...state, ...patch };
+    if (next.autoEstimate) {
+      const est = computeAutoEstimates(next);
+      if (est) next = { ...next, ...est };
+    }
+    state = next;
     recalculate();
     renderOutputs();
     updateToolBar();
     updateBadges();
+    updateAutoLockUI();
+  }
+
+  // Visually lock the four auto-derived inputs when autoEstimate is on, and
+  // show the small "auto" badge next to each label.
+  function updateAutoLockUI() {
+    const locked = !!state.autoEstimate;
+    AUTO_FIELDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.readOnly = locked;
+      el.classList.toggle('locked', locked);
+    });
+    document.querySelectorAll('.auto-badge').forEach(b => { b.hidden = !locked; });
+    const cb = document.getElementById('autoEstimate');
+    if (cb) cb.checked = locked;
   }
 
   // Add event listeners for all inputs
   function attachInputListeners() {
-    const inputs = ['partNumber', 'partName', 'region', 'partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'machineRateOverride', 'laborRateOverride', 'ohRateOverride', 'marginRateOverride', 'toolingCost', 'toolLife', 'cumulativeVolume'];
+    const inputs = ['partNumber', 'partName', 'region', 'partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'machineRateOverride', 'laborRateOverride', 'ohRateOverride', 'marginRateOverride', 'toolingCost', 'toolLife', 'cumulativeVolume', 'wallThicknessMm', 'annualVolume'];
 
     inputs.forEach(id => {
       const el = document.getElementById(id);
@@ -77,6 +139,11 @@
         });
       }
     });
+
+    const toggle = document.getElementById('autoEstimate');
+    if (toggle) {
+      toggle.addEventListener('change', (e) => setState({ autoEstimate: !!e.target.checked }));
+    }
   }
 
   // Client-side cost calculation (mirrors Calc.gs)
@@ -165,10 +232,11 @@
   function recalculate() {
     // Sync input fields from state, but never overwrite the one the user is typing into —
     // partial values like "0." parse to 0, and writing 0 back would strip the trailing dot mid-keystroke.
+    // Checkboxes (e.g. autoEstimate) are kept in sync by updateAutoLockUI, not .value.
     const active = document.activeElement;
     Object.keys(state).forEach(key => {
       const el = document.getElementById(key);
-      if (el && key !== 'key' && el !== active) {
+      if (el && key !== 'key' && el !== active && el.type !== 'checkbox') {
         el.value = state[key] !== null && state[key] !== undefined ? state[key] : '';
       }
     });
@@ -290,8 +358,10 @@
   const TEXT_FIELDS = new Set(['partNumber', 'partName', 'region']);
 
   // Reset section to blank — numeric inputs go null, text inputs go ''.
+  // The 'auto' reset also flips autoEstimate off so the four target fields unlock.
   function resetSection(section) {
     const resetMap = {
+      auto: ['wallThicknessMm', 'annualVolume'],
       part: ['partNumber', 'partName', 'region', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate'],
       resin: ['partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'resinCostPerKg'],
       machine: ['tonnage', 'machineRateOverride'],
@@ -304,6 +374,7 @@
     keys.forEach(key => {
       patch[key] = TEXT_FIELDS.has(key) ? '' : null;
     });
+    if (section === 'auto') patch.autoEstimate = false;
     setState(patch);
   }
 
@@ -505,11 +576,12 @@
   function loadPart(key) {
     const part = savedParts.find(p => p.key === key);
     if (part) {
-      state = { ...part };
+      state = { ...DEFAULTS, ...part };
       recalculate();
       renderOutputs();
       updateToolBar();
       updateBadges();
+      updateAutoLockUI();
       updateSaveButton();
     }
   }
@@ -546,6 +618,7 @@
         renderOutputs();
         updateToolBar();
         updateBadges();
+        updateAutoLockUI();
         updateSaveButton();
       }
       showToast('Part deleted');
@@ -581,6 +654,7 @@
     renderOutputs();
     updateToolBar();
     updateBadges();
+    updateAutoLockUI();
     updateSaveButton();
     showToast('New part started');
   }
@@ -604,5 +678,6 @@
     renderOutputs();
     updateToolBar();
     updateBadges();
+    updateAutoLockUI();
   });
 </script>
