@@ -1534,9 +1534,6 @@
             <span class="formula-line"><var>total</var><span class="eq">=</span><var>base</var><span class="op">+</span><var>toolAmortPP</var></span>
           </div>
           <p>Final per-part cost. Tooling amortization is added on top of the marked-up base; once tooling is paid off it drops to zero and <var>total</var> = <var>base</var>.</p>
-          <ul class="refs">
-            <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L73" target="_blank" rel="noopener">Calc.gs — total assembly</a></li>
-          </ul>
         </div>
 
         <div class="formula-block" id="m-base">
@@ -1548,7 +1545,6 @@
           </div>
           <p>Standard cost waterfall: manufacturing subtotal → landed (duty + SG&amp;A) → marked-up. Duty and SG&amp;A both hit <var>mfgSub</var>, not each other.</p>
           <ul class="refs">
-            <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L46-L62" target="_blank" rel="noopener">Calc.gs — base waterfall</a></li>
             <li><a href="https://hts.usitc.gov/" target="_blank" rel="noopener">USITC Harmonized Tariff Schedule (duty lookup)</a></li>
           </ul>
         </div>
@@ -1562,7 +1558,6 @@
           </div>
           <p>Even amortization across the tool's rated life in <em>shots</em>, multiplied by cavities to convert to parts. Scrap multiplier accounts for parts lost to defects.</p>
           <ul class="refs">
-            <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L64-L70" target="_blank" rel="noopener">Calc.gs — tooling amortization</a></li>
             <li><a href="https://www.ptonline.com/" target="_blank" rel="noopener">Plastics Technology — tooling cost &amp; mold life reference</a></li>
           </ul>
         </div>
@@ -1576,7 +1571,6 @@
           </div>
           <p>Net virgin resin per part = part weight plus the un-recycled portion of runner. <var>regrindRate</var> is the fraction of runner reground and reused; at 1.0 the runner is free, at 0.0 the full runner is consumed.</p>
           <ul class="refs">
-            <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L15-L23" target="_blank" rel="noopener">Calc.gs — material cost</a></li>
             <li><a href="https://www.theplasticsexchange.com/" target="_blank" rel="noopener">Plastics Exchange — spot resin pricing</a></li>
           </ul>
         </div>
@@ -1593,7 +1587,6 @@
           </div>
           <p>Parts/hr drives machine and direct labor; secondary ops add a flat per-part time. <var>utilization</var> defaults to 0.85 — accounts for changeovers, breaks, and minor stoppages.</p>
           <ul class="refs">
-            <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L25-L42" target="_blank" rel="noopener">Calc.gs — machine &amp; labor</a></li>
             <li><a href="https://www.bls.gov/oes/current/oes513011.htm" target="_blank" rel="noopener">US BLS — molding operator wages (OES 51-3011)</a></li>
           </ul>
         </div>
@@ -1607,9 +1600,6 @@
             <span class="formula-line"><var>scrap</var><span class="eq">=</span><var>matScrap</var><span class="op">+</span><var>machScrap</var><span class="op">+</span><var>laborScrap</var></span>
           </div>
           <p>Modeled as a multiplicative uplift on each cost bucket. Note: this is slightly looser than the textbook approach of <var>pph</var> × (1 − <var>scrapRate</var>) good parts; results are within ~1% for scrap &lt; 5%.</p>
-          <ul class="refs">
-            <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L21-L37" target="_blank" rel="noopener">Calc.gs — scrap multipliers</a></li>
-          </ul>
         </div>
 
         <div class="formula-block" id="m-overhead">
@@ -1619,9 +1609,6 @@
             <span class="formula-line"><var>ohTotal</var><span class="eq">=</span><span class="paren">(</span><var>directLP</var><span class="op">+</span><var>secLP</var><span class="paren">)</span><span class="op">×</span><var>ohRate</var></span>
           </div>
           <p>Labor-based overhead burden — <em>not</em> applied to machine cost. If <var>ohRate</var> represents a plant-wide overhead, this will under-allocate to machine-heavy parts vs. a full conversion-cost basis.</p>
-          <ul class="refs">
-            <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L41-L45" target="_blank" rel="noopener">Calc.gs — overhead</a></li>
-          </ul>
         </div>
 
         <div class="formula-block" id="m-profit">
@@ -1631,9 +1618,6 @@
             <span class="formula-line"><var>profit</var><span class="eq">=</span><span class="paren">(</span><var>mfgSub</var><span class="op">+</span><var>duty</var><span class="op">+</span><var>sga</var><span class="paren">)</span><span class="op">×</span><var>marginRate</var></span>
           </div>
           <p>Margin applied to landed cost. Region defaults: USA 10%, Mexico 9%, China 8%, Indonesia 8%.</p>
-          <ul class="refs">
-            <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L54-L62" target="_blank" rel="noopener">Calc.gs — margin</a></li>
-          </ul>
         </div>
 
         <div class="formula-block" id="m-machine">
@@ -1643,10 +1627,6 @@
             <span class="formula-line"><var>machRate</var><span class="eq">=</span><var>machineRateOverride</var><span class="cond">if set, else</span><span class="prop"><var>bracket</var><span class="dot">.</span><var>baseUSA</var></span><span class="op">×</span><span class="prop"><var>region</var><span class="dot">.</span><var>multiplier</var></span></span>
           </div>
           <p>Tonnage brackets (<var>baseUSA</var> $/hr): 50t→$32, 100t→$42, 200t→$52, 400t→$68, 700t→$88, 1000t→$110, &gt;1000t→$140. Region multipliers: USA 1.00, Mexico 0.615, China 0.538, Indonesia 0.364.</p>
-          <ul class="refs">
-            <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Data.gs#L54-L62" target="_blank" rel="noopener">Data.gs — tonnage brackets</a></li>
-            <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Data.gs#L3-L52" target="_blank" rel="noopener">Data.gs — region multipliers</a></li>
-          </ul>
         </div>
 
         <div class="formula-block" id="m-constants">
@@ -1673,7 +1653,6 @@
           </table>
           <p>Labor rates are fully-burdened $/hr. Duty assumes Section 301 list for China; revisit if HTS code carries a different rate.</p>
           <ul class="refs">
-            <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Data.gs" target="_blank" rel="noopener">Data.gs — full region table</a></li>
             <li><a href="https://hts.usitc.gov/" target="_blank" rel="noopener">USITC HTS lookup</a></li>
             <li><a href="https://www.bls.gov/oes/" target="_blank" rel="noopener">US BLS Occupational Employment Statistics</a></li>
           </ul>
