@@ -863,24 +863,24 @@
         <div class="input-row">
           <div class="input-group">
             <label class="input-label">Cavities</label>
-            <input class="input-field" type="number" id="cavities" min="1" value="2">
+            <input class="input-field" type="number" id="cavities" min="1" step="1" inputmode="numeric" value="2">
             <span class="input-help">Number of parts produced per shot (mold cavities).</span>
           </div>
           <div class="input-group">
             <label class="input-label">Cycle Time (sec)</label>
-            <input class="input-field" type="number" id="cycleTimeSec" step="0.1" value="28">
+            <input class="input-field" type="number" id="cycleTimeSec" min="0" step="any" inputmode="decimal" value="28">
             <span class="input-help">Total seconds per shot (close → fill → cool → eject).</span>
           </div>
           <div class="input-group">
             <label class="input-label">Utilization</label>
-            <input class="input-field" type="number" id="utilization" step="0.01" min="0" max="1" value="0.85">
+            <input class="input-field" type="number" id="utilization" min="0" max="1" step="any" inputmode="decimal" value="0.85">
             <span class="input-help">Fraction of time the press actually runs. 0–1 (e.g. 0.85 = 85%).</span>
           </div>
         </div>
         <div class="input-row">
           <div class="input-group">
             <label class="input-label">Scrap Rate</label>
-            <input class="input-field" type="number" id="scrapRate" step="0.01" min="0" max="1" value="0.02">
+            <input class="input-field" type="number" id="scrapRate" min="0" max="1" step="any" inputmode="decimal" value="0.02">
             <span class="input-help">Fraction of parts scrapped. 0–1 (e.g. 0.02 = 2%).</span>
           </div>
         </div>
@@ -896,31 +896,31 @@
         <div class="input-row">
           <div class="input-group">
             <label class="input-label">Part Weight (g)</label>
-            <input class="input-field" type="number" id="partWeightG" step="0.1" value="85">
+            <input class="input-field" type="number" id="partWeightG" min="0" step="any" inputmode="decimal" value="85">
             <span class="input-help">Net weight of one finished part, in grams.</span>
           </div>
           <div class="input-group">
             <label class="input-label">Runner %</label>
-            <input class="input-field" type="number" id="runnerPct" step="0.1" value="14">
+            <input class="input-field" type="number" id="runnerPct" min="0" step="any" inputmode="decimal" value="14">
             <span class="input-help">Runner/sprue weight as a percent of part weight (e.g. 14 = 14%).</span>
           </div>
         </div>
         <div class="input-row">
           <div class="input-group">
             <label class="input-label">Runner Override (g)</label>
-            <input class="input-field" type="number" id="runnerWeightOverride" step="0.1" placeholder="Leave blank for auto">
+            <input class="input-field" type="number" id="runnerWeightOverride" min="0" step="any" inputmode="decimal" placeholder="Leave blank for auto">
             <span class="input-help">Enter a measured runner weight to override the Runner % above.</span>
           </div>
         </div>
         <div class="input-row">
           <div class="input-group">
             <label class="input-label">Regrind Rate</label>
-            <input class="input-field" type="number" id="regrindRate" step="0.01" min="0" max="1" value="0.30">
+            <input class="input-field" type="number" id="regrindRate" min="0" max="1" step="any" inputmode="decimal" value="0.30">
             <span class="input-help">Share of runner that gets reground and reused. 0–1 (e.g. 0.30 = 30%).</span>
           </div>
           <div class="input-group">
             <label class="input-label">Resin Cost ($/kg)</label>
-            <input class="input-field" type="number" id="resinCostPerKg" step="0.01" value="2.98">
+            <input class="input-field" type="number" id="resinCostPerKg" min="0" step="any" inputmode="decimal" value="2.98">
             <span class="input-help">Material price per kilogram of resin.</span>
           </div>
         </div>
@@ -936,14 +936,14 @@
         <div class="input-row">
           <div class="input-group">
             <label class="input-label">Tonnage</label>
-            <input class="input-field" type="number" id="tonnage" step="1" value="250">
+            <input class="input-field" type="number" id="tonnage" min="0" step="1" inputmode="numeric" value="250">
             <span class="input-help">Press clamp force in tons — picks the machine $/hr bracket.</span>
           </div>
         </div>
         <div class="input-row">
           <div class="input-group">
             <label class="input-label">Machine Rate Override ($/hr)</label>
-            <input class="input-field" type="number" id="machineRateOverride" step="0.1" placeholder="Leave blank for auto">
+            <input class="input-field" type="number" id="machineRateOverride" min="0" step="any" inputmode="decimal" placeholder="Leave blank for auto">
             <span class="input-help">Type a $/hr rate to override the region + tonnage default.</span>
           </div>
         </div>
@@ -960,7 +960,7 @@
         <div class="input-row">
           <div class="input-group">
             <label class="input-label">Labor Rate Override ($/hr)</label>
-            <input class="input-field" type="number" id="laborRateOverride" step="0.01" placeholder="Leave blank for regional default">
+            <input class="input-field" type="number" id="laborRateOverride" min="0" step="any" inputmode="decimal" placeholder="Leave blank for regional default">
             <span class="input-help">Type a $/hr labor rate to override the regional default.</span>
           </div>
         </div>
@@ -968,7 +968,7 @@
         <div class="input-row" style="margin-top: 12px;">
           <div class="input-group">
             <label class="input-label">OH Rate Override %</label>
-            <input class="input-field" type="number" id="ohRateOverride" step="0.1" placeholder="Leave blank for regional default">
+            <input class="input-field" type="number" id="ohRateOverride" min="0" step="any" inputmode="decimal" placeholder="Leave blank for regional default">
             <span class="input-help">Overhead as a percent of direct labor (e.g. 90 = 90%).</span>
           </div>
         </div>
@@ -985,7 +985,7 @@
         <div class="input-row">
           <div class="input-group">
             <label class="input-label">Margin Rate Override %</label>
-            <input class="input-field" type="number" id="marginRateOverride" step="0.1" placeholder="Leave blank for regional default">
+            <input class="input-field" type="number" id="marginRateOverride" min="0" step="any" inputmode="decimal" placeholder="Leave blank for regional default">
             <span class="input-help">Contribution margin added on top, as a percent (e.g. 10 = 10%).</span>
           </div>
         </div>
@@ -1002,19 +1002,19 @@
         <div class="input-row">
           <div class="input-group">
             <label class="input-label">Tooling Cost ($)</label>
-            <input class="input-field" type="number" id="toolingCost" step="1" value="85000">
+            <input class="input-field" type="number" id="toolingCost" min="0" step="1" inputmode="numeric" value="85000">
             <span class="input-help">One-time mold cost to amortize across parts produced.</span>
           </div>
           <div class="input-group">
             <label class="input-label">Tool Life (shots)</label>
-            <input class="input-field" type="number" id="toolLife" step="1" value="750000">
+            <input class="input-field" type="number" id="toolLife" min="0" step="1" inputmode="numeric" value="750000">
             <span class="input-help">Shots the tool can run before retirement (× cavities = total parts).</span>
           </div>
         </div>
         <div class="input-row">
           <div class="input-group">
             <label class="input-label">Cumulative Volume</label>
-            <input class="input-field" type="number" id="cumulativeVolume" step="1" min="0" value="0">
+            <input class="input-field" type="number" id="cumulativeVolume" min="0" step="1" inputmode="numeric" value="0">
             <span class="input-help">Parts already produced. Once it hits tool life, tooling cost drops to $0/pc.</span>
           </div>
         </div>
@@ -1176,9 +1176,22 @@
       const el = document.getElementById(id);
       if (el) {
         el.addEventListener('input', (e) => {
-          const val = e.target.type === 'number' || e.target.type === 'range'
-            ? (e.target.value === '' ? null : parseFloat(e.target.value))
-            : e.target.value;
+          let val;
+          if (e.target.type === 'number' || e.target.type === 'range') {
+            if (e.target.value === '') {
+              val = null;
+            } else {
+              val = parseFloat(e.target.value);
+              if (Number.isFinite(val)) {
+                const min = e.target.min !== '' ? parseFloat(e.target.min) : null;
+                const max = e.target.max !== '' ? parseFloat(e.target.max) : null;
+                if (min !== null && val < min) { val = min; e.target.value = String(min); }
+                if (max !== null && val > max) { val = max; e.target.value = String(max); }
+              }
+            }
+          } else {
+            val = e.target.value;
+          }
           setState({ [id]: val });
         });
       }
