@@ -676,6 +676,94 @@
       to { transform: translateX(0); opacity: 1; }
     }
 
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(16, 24, 18, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      animation: fadeIn 0.15s ease-out;
+    }
+
+    .modal-dialog {
+      background: var(--strike);
+      border: 1px solid var(--grey-20);
+      border-radius: var(--radius-md);
+      box-shadow: 0 20px 48px rgba(0, 0, 0, 0.24);
+      padding: 24px 26px;
+      max-width: 420px;
+      width: calc(100% - 32px);
+      animation: dialogIn 0.18s ease-out;
+    }
+
+    .modal-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--terminal);
+      margin: 0 0 8px;
+      letter-spacing: 0.01em;
+    }
+
+    .modal-body {
+      font-size: 13px;
+      color: var(--grey-80);
+      line-height: 1.5;
+      margin: 0 0 20px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .modal-btn {
+      padding: 9px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--grey-20);
+      background: var(--strike);
+      color: var(--grey-80);
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .modal-btn:hover {
+      background: var(--grey-10);
+      border-color: var(--grey-30);
+    }
+
+    .modal-btn.primary {
+      background: var(--energy);
+      border-color: var(--energy);
+      color: var(--strike);
+    }
+
+    .modal-btn.primary:hover {
+      background: var(--energy-90);
+      border-color: var(--energy-90);
+    }
+
+    .modal-btn:focus-visible {
+      outline: none;
+      box-shadow: var(--ring-energy);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes dialogIn {
+      from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
     select {
       padding: 9px 12px;
       border: 1px solid var(--grey-20);
@@ -948,7 +1036,7 @@
       </div>
     </div>
 
-    <button onclick="handleSave()" class="primary-cta">Save part to library</button>
+    <button id="save-btn" onclick="handleSave()" class="primary-cta">Save part to library</button>
   </div>
 
   <div id="right-panel">
@@ -1357,22 +1445,92 @@
     const existing = state.key && savedParts.find(p => p.key === state.key);
     if (existing) {
       const label = (state.partName || state.partNumber || existing.partName || existing.partNumber || 'this part').toString().trim() || 'this part';
-      if (!confirm('You are about to edit an existing part (' + label + '). Overwrite the saved version?')) {
-        return;
-      }
+      const ok = await showConfirm({
+        title: 'Update existing part?',
+        message: 'You are about to overwrite the saved version of ' + label + '.',
+        confirmLabel: 'Update part',
+        cancelLabel: 'Cancel'
+      });
+      if (!ok) return;
     }
     isSaving = true;
     try {
       const payload = resolveDefaultsForSave(state);
       setState(payload);
       const key = await runServer('savePart', JSON.stringify(payload));
+      if (key) state.key = key;
       showToast(existing ? 'Part updated' : 'Part saved');
       await loadPartsList();
+      updateSaveButton();
     } catch (e) {
       showToast('Save failed: ' + e.message, 'error');
     } finally {
       isSaving = false;
     }
+  }
+
+  // Reflect whether we're editing a saved part on the primary CTA label.
+  function updateSaveButton() {
+    const btn = document.getElementById('save-btn');
+    if (!btn) return;
+    const isEditing = state.key && savedParts.some(p => p.key === state.key);
+    btn.textContent = isEditing ? 'Update part' : 'Save part to library';
+  }
+
+  // In-app confirmation dialog. Returns a Promise<boolean>.
+  function showConfirm({ title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel' }) {
+    return new Promise(resolve => {
+      const backdrop = document.createElement('div');
+      backdrop.className = 'modal-backdrop';
+      backdrop.setAttribute('role', 'dialog');
+      backdrop.setAttribute('aria-modal', 'true');
+
+      const dialog = document.createElement('div');
+      dialog.className = 'modal-dialog';
+
+      const h = document.createElement('h3');
+      h.className = 'modal-title';
+      h.textContent = title;
+
+      const p = document.createElement('p');
+      p.className = 'modal-body';
+      p.textContent = message;
+
+      const actions = document.createElement('div');
+      actions.className = 'modal-actions';
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'modal-btn';
+      cancelBtn.textContent = cancelLabel;
+
+      const okBtn = document.createElement('button');
+      okBtn.type = 'button';
+      okBtn.className = 'modal-btn primary';
+      okBtn.textContent = confirmLabel;
+
+      actions.append(cancelBtn, okBtn);
+      dialog.append(h, p, actions);
+      backdrop.append(dialog);
+
+      function close(result) {
+        document.removeEventListener('keydown', onKey);
+        backdrop.remove();
+        resolve(result);
+      }
+      function onKey(e) {
+        if (e.key === 'Escape') close(false);
+        else if (e.key === 'Enter') close(true);
+      }
+
+      cancelBtn.addEventListener('click', () => close(false));
+      okBtn.addEventListener('click', () => close(true));
+      backdrop.addEventListener('click', e => { if (e.target === backdrop) close(false); });
+      document.addEventListener('keydown', onKey);
+
+      document.body.appendChild(backdrop);
+      okBtn.focus();
+    });
   }
 
   // Load parts list
@@ -1381,6 +1539,7 @@
       const json = await runServer('loadAllParts');
       savedParts = JSON.parse(json);
       renderPartsList();
+      updateSaveButton();
     } catch (e) {
       console.error('Load failed:', e);
     }
@@ -1454,6 +1613,7 @@
       renderOutputs();
       updateToolBar();
       updateBadges();
+      updateSaveButton();
     }
   }
 
@@ -1507,6 +1667,7 @@
     renderOutputs();
     updateToolBar();
     updateBadges();
+    updateSaveButton();
     showToast('New part started');
   }
 
