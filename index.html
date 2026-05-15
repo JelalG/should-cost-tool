@@ -1273,10 +1273,12 @@
 
   // Recalculate outputs
   function recalculate() {
-    // Update input fields from state
+    // Sync input fields from state, but never overwrite the one the user is typing into —
+    // partial values like "0." parse to 0, and writing 0 back would strip the trailing dot mid-keystroke.
+    const active = document.activeElement;
     Object.keys(state).forEach(key => {
       const el = document.getElementById(key);
-      if (el && key !== 'key') {
+      if (el && key !== 'key' && el !== active) {
         el.value = state[key] !== null && state[key] !== undefined ? state[key] : '';
       }
     });
