@@ -7,6 +7,20 @@ function doGet() {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
+// Get or create the Parts Library sheet with a header row
+function getOrCreatePartsSheet(ss) {
+  let sh = ss.getSheetByName('Parts Library');
+  if (!sh) {
+    sh = ss.insertSheet('Parts Library');
+    sh.appendRow(FIELD_KEYS);
+    sh.setFrozenRows(1);
+  } else if (sh.getLastRow() === 0) {
+    sh.appendRow(FIELD_KEYS);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
 // Build unique key from part data
 function buildSlug(inp) {
   const raw = (inp.partNumber ? inp.partNumber + '_' : '') + (inp.partName || 'part');
@@ -54,7 +68,7 @@ function savePart(partJson) {
     }
 
     const ss = SpreadsheetApp.openById(sheetId);
-    const sh = ss.getSheetByName('Parts Library');
+    const sh = getOrCreatePartsSheet(ss);
     const data = sh.getDataRange().getValues();
 
     const slug = buildSlug(inp);
@@ -93,7 +107,7 @@ function loadAllParts() {
     }
 
     const ss = SpreadsheetApp.openById(sheetId);
-    const sh = ss.getSheetByName('Parts Library');
+    const sh = getOrCreatePartsSheet(ss);
     const data = sh.getDataRange().getValues();
 
     const [header, ...rows] = data;
@@ -125,7 +139,7 @@ function deletePart(key) {
     }
 
     const ss = SpreadsheetApp.openById(sheetId);
-    const sh = ss.getSheetByName('Parts Library');
+    const sh = getOrCreatePartsSheet(ss);
     const data = sh.getDataRange().getValues();
 
     for (let i = 1; i < data.length; i++) {

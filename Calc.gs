@@ -77,3 +77,10 @@ function calcSC(inp) {
 
   return results;
 }
+
+// Editor test runner — select this in the Apps Script Run menu to exercise calcSC with DEFAULTS.
+function testCalcSC() {
+  const out = calcSC(DEFAULTS);
+  Logger.log(JSON.stringify(out, null, 2));
+  return out;
+}
