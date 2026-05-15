@@ -1118,28 +1118,29 @@
 </div>
 
 <script>
-  // DEFAULTS (mirrors Data.gs) — declared before state so initialization is valid
+  // DEFAULTS — the blank/new-part editor state. Text fields go '', numerics go null.
+  // Placeholders in the markup hint at sample values without committing them.
   const DEFAULTS = {
-    partNumber: 'PN-0001',
-    partName: 'Sample Part',
-    region: 'Mexico',
-    partWeightG: 85,
-    runnerPct: 14,
+    partNumber: '',
+    partName: '',
+    region: '',
+    partWeightG: null,
+    runnerPct: null,
     runnerWeightOverride: null,
-    regrindRate: 0.30,
-    cavities: 2,
-    cycleTimeSec: 28,
-    utilization: 0.85,
-    scrapRate: 0.02,
-    resinCostPerKg: 2.98,
-    tonnage: 250,
+    regrindRate: null,
+    cavities: null,
+    cycleTimeSec: null,
+    utilization: null,
+    scrapRate: null,
+    resinCostPerKg: null,
+    tonnage: null,
     machineRateOverride: null,
     laborRateOverride: null,
     ohRateOverride: null,
     marginRateOverride: null,
-    toolingCost: 85000,
-    toolLife: 750000,
-    cumulativeVolume: 0
+    toolingCost: null,
+    toolLife: null,
+    cumulativeVolume: null
   };
 
   // Global state
