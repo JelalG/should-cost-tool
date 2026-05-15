@@ -580,30 +580,201 @@
 
     .formula-inline {
       background: var(--green-5);
-      padding: 10px 16px 12px;
+      padding: 12px 16px 14px;
       font-size: 12px;
       color: var(--grey-80);
       border-bottom: 1px solid var(--grey-10);
     }
     .formula-inline[hidden] { display: none; }
-    .formula-inline code {
-      font-family: var(--font-mono);
-      background: var(--strike);
-      padding: 3px 8px;
-      border-radius: 4px;
-      display: inline-block;
-      color: var(--terminal);
-      font-size: 11px;
-      letter-spacing: -0.005em;
-    }
     .formula-inline .note {
       display: block;
-      margin-top: 6px;
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+    .formula-inline .note var {
+      font-style: italic;
+      color: var(--grounded);
+      font-weight: 600;
+      background: rgba(30, 77, 43, 0.08);
+      padding: 0 5px;
+      border-radius: 3px;
+      font-size: 11px;
     }
     .formula-inline a {
       color: var(--grounded);
       text-decoration: underline;
       text-underline-offset: 2px;
+      font-weight: 600;
+    }
+
+    /* Graphical formula display — replaces monospace code blocks */
+    .formula-display {
+      background: var(--strike);
+      border: 1px solid var(--grey-20);
+      border-left: 3px solid var(--green-60);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--terminal);
+      line-height: 1.95;
+      letter-spacing: 0.005em;
+      font-feature-settings: 'tnum', 'ss01';
+    }
+    .formula-display .formula-line {
+      display: block;
+      white-space: nowrap;
+      overflow-x: auto;
+      padding: 1px 0;
+    }
+    .formula-display .formula-line + .formula-line {
+      border-top: 1px dashed var(--grey-10);
+      margin-top: 4px;
+      padding-top: 5px;
+    }
+    .formula-display var {
+      font-style: italic;
+      font-weight: 600;
+      color: var(--grounded);
+      font-family: 'Cambria', 'Georgia', 'Times New Roman', serif;
+      letter-spacing: 0;
+      padding: 0 1px;
+    }
+    .formula-display .op {
+      color: var(--grey-60);
+      font-weight: 500;
+      margin: 0 4px;
+    }
+    .formula-display .eq {
+      color: var(--energy-90);
+      font-weight: 700;
+      margin: 0 8px;
+    }
+    .formula-display .num {
+      color: var(--terminal);
+      font-weight: 600;
+    }
+    .formula-display .paren {
+      color: var(--grey-60);
+      font-weight: 400;
+    }
+    .formula-display .cond {
+      color: var(--grey-60);
+      font-style: italic;
+      font-size: 11px;
+      margin-left: 6px;
+    }
+    .formula-display .frac {
+      display: inline-flex;
+      flex-direction: column;
+      vertical-align: middle;
+      text-align: center;
+      margin: 0 4px;
+      font-size: 11.5px;
+      line-height: 1.1;
+    }
+    .formula-display .frac > .num-top {
+      border-bottom: 1.5px solid var(--terminal);
+      padding: 0 6px 2px;
+    }
+    .formula-display .frac > .num-bot {
+      padding: 2px 6px 0;
+    }
+    .formula-display .prop {
+      font-style: italic;
+      font-weight: 600;
+      color: var(--grounded);
+      font-family: 'Cambria', 'Georgia', 'Times New Roman', serif;
+      letter-spacing: 0;
+    }
+    .formula-display .prop .dot {
+      color: var(--grey-40);
+      font-weight: 400;
+      margin: 0 1px;
+    }
+    .formula-display .piecewise {
+      display: inline-flex;
+      align-items: stretch;
+      vertical-align: middle;
+      margin: 2px 4px;
+    }
+    .formula-display .piecewise .brace {
+      display: inline-flex;
+      align-items: center;
+      font-size: 28px;
+      font-weight: 300;
+      color: var(--grey-60);
+      line-height: 1;
+      padding-right: 8px;
+      transform: scaleY(1.4);
+    }
+    .formula-display .piecewise .cases {
+      display: inline-flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 4px;
+      font-size: 12px;
+      line-height: 1.3;
+    }
+    .formula-display .piecewise .case-row {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+    }
+    .formula-display .piecewise .case-when {
+      color: var(--grey-60);
+      font-style: italic;
+      font-size: 11px;
+    }
+    .formula-display .formula-line.indent { padding-left: 18px; }
+    .formula-display .else-eq {
+      color: var(--energy-90);
+      font-weight: 700;
+      display: inline-block;
+      width: 16px;
+      text-align: right;
+      margin-right: 4px;
+    }
+
+    /* Region constants table — replaces tabular code block */
+    .constants-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--strike);
+      border: 1px solid var(--grey-20);
+      border-left: 3px solid var(--green-60);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      font-size: 12px;
+      font-feature-settings: 'tnum';
+      margin-bottom: 10px;
+    }
+    .constants-table thead th {
+      background: var(--green-5);
+      color: var(--grounded);
+      font-weight: 700;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 8px 10px;
+      text-align: right;
+      border-bottom: 1px solid var(--grey-20);
+    }
+    .constants-table thead th:first-child {
+      text-align: left;
+    }
+    .constants-table tbody td {
+      padding: 7px 10px;
+      text-align: right;
+      color: var(--terminal);
+      border-bottom: 1px solid var(--grey-10);
+    }
+    .constants-table tbody tr:last-child td { border-bottom: none; }
+    .constants-table tbody td:first-child {
+      text-align: left;
+      font-weight: 600;
+      color: var(--grounded);
+      font-family: 'Cambria', 'Georgia', serif;
+      font-style: italic;
     }
 
     .methodology {
@@ -635,56 +806,88 @@
     .methodology[open] > summary::before { content: '▾ '; }
     .methodology-body { padding: 4px 0; }
     .formula-block {
-      padding: 14px 16px;
+      padding: 16px 18px;
       border-bottom: 1px solid var(--grey-10);
+      scroll-margin-top: 12px;
     }
     .formula-block:last-child { border-bottom: none; }
     .formula-block h4 {
       font-size: 12px;
       font-weight: 700;
       color: var(--grounded);
-      margin-bottom: 8px;
-      letter-spacing: -0.005em;
+      margin-bottom: 10px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
     }
     .formula-block h4 a {
       color: inherit;
       text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
     .formula-block h4 a:hover { text-decoration: underline; }
-    .formula-block code {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      background: var(--conduit);
-      padding: 6px 10px;
-      border-radius: 4px;
-      display: block;
-      color: var(--terminal);
-      margin-bottom: 8px;
-      white-space: pre-wrap;
+    .formula-block .formula-display {
+      margin-bottom: 10px;
     }
     .formula-block p {
-      font-size: 12px;
+      font-size: 12.5px;
       color: var(--grey-80);
-      margin-bottom: 8px;
+      margin-bottom: 10px;
+      line-height: 1.55;
+    }
+    .formula-block p var {
+      font-style: italic;
+      color: var(--grounded);
+      font-weight: 600;
+      background: rgba(30, 77, 43, 0.08);
+      padding: 0 5px;
+      border-radius: 3px;
+      font-size: 11.5px;
+      font-family: 'Cambria', 'Georgia', serif;
     }
     .formula-block .refs {
       list-style: none;
       font-size: 11px;
       color: var(--grey-60);
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--grey-10);
+    }
+    .formula-block .refs::before {
+      content: 'References';
+      display: block;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--grey-60);
+      margin-bottom: 4px;
     }
     .formula-block .refs li {
-      padding: 2px 0;
+      padding: 3px 0;
     }
     .formula-block .refs a {
       color: var(--grounded);
       text-decoration: none;
       border-bottom: 1px dotted var(--grey-40);
+      font-weight: 500;
     }
     .formula-block .refs a:hover { border-bottom-color: var(--grounded); }
     .formula-block .refs li::before {
       content: '↗ ';
       color: var(--grey-40);
       margin-right: 2px;
+    }
+
+    /* Highlight pulse for jump-to-section */
+    @keyframes highlight-flash {
+      0%   { background-color: var(--yellow-5); box-shadow: 0 0 0 4px var(--yellow-5); }
+      100% { background-color: transparent;     box-shadow: 0 0 0 4px transparent; }
+    }
+    .highlight-flash {
+      animation: highlight-flash 1600ms ease-out;
+      border-radius: var(--radius-sm);
     }
 
     .parts-list {
@@ -1196,8 +1399,10 @@
         <div class="output-value">$<span id="out-total-with-tooling">0.0000</span></div>
       </div>
       <div class="formula-inline" id="formula-total" hidden>
-        <code>base + toolAmortPP</code>
-        <span class="note">Sum of base unit cost and per-part tooling amortization. <a href="#m-total">Details ↓</a></span>
+        <div class="formula-display">
+          <span class="formula-line"><var>total</var><span class="eq">=</span><var>base</var><span class="op">+</span><var>toolAmortPP</var></span>
+        </div>
+        <span class="note">Sum of <var>base</var> unit cost and per-part tooling amortization. <a href="#m-total">See methodology ↓</a></span>
       </div>
 
       <div class="output-row" id="row-base">
@@ -1207,8 +1412,10 @@
         <div class="output-value">$<span id="out-base-total">0.0000</span></div>
       </div>
       <div class="formula-inline" id="formula-base" hidden>
-        <code>(mfgSub + duty + sga) × (1 + margin)</code>
-        <span class="note">mfgSub = material + machine + labor + secMach + overhead + pkg + freight. <a href="#m-base">Details ↓</a></span>
+        <div class="formula-display">
+          <span class="formula-line"><var>base</var><span class="eq">=</span><span class="paren">(</span><var>mfgSub</var><span class="op">+</span><var>duty</var><span class="op">+</span><var>sga</var><span class="paren">)</span><span class="op">×</span><span class="paren">(</span><span class="num">1</span><span class="op">+</span><var>margin</var><span class="paren">)</span></span>
+        </div>
+        <span class="note"><var>mfgSub</var> = material + machine + labor + sec. ops + overhead + packaging + freight. <a href="#m-base">See methodology ↓</a></span>
       </div>
 
       <div class="output-row" id="row-tool">
@@ -1218,8 +1425,10 @@
         <div class="output-value">$<span id="out-tool-amort">0.0000</span></div>
       </div>
       <div class="formula-inline" id="formula-tool" hidden>
-        <code>toolingCost / (toolLife × cavities) × (1 + scrapRate)</code>
-        <span class="note">Zeroed once cumulativeVolume ≥ toolLife × cavities. <a href="#m-tool">Details ↓</a></span>
+        <div class="formula-display">
+          <span class="formula-line"><var>toolAmortPP</var><span class="eq">=</span><span class="frac"><span class="num-top"><var>toolingCost</var></span><span class="num-bot"><var>toolLife</var><span class="op">×</span><var>cavities</var></span></span><span class="op">×</span><span class="paren">(</span><span class="num">1</span><span class="op">+</span><var>scrapRate</var><span class="paren">)</span></span>
+        </div>
+        <span class="note">Drops to <span class="num">0</span> once <var>cumulativeVolume</var> ≥ <var>toolLife</var> × <var>cavities</var>. <a href="#m-tool">See methodology ↓</a></span>
       </div>
 
       <div class="output-row" id="row-resin">
@@ -1229,8 +1438,10 @@
         <div class="output-value">$<span id="out-resin">0.0000</span></div>
       </div>
       <div class="formula-inline" id="formula-resin" hidden>
-        <code>(partWeightG + runnerG × (1 − regrindRate)) / 1000 × resinCostPerKg</code>
-        <span class="note">runnerG = partWeightG × runnerPct/100 unless overridden. <a href="#m-resin">Details ↓</a></span>
+        <div class="formula-display">
+          <span class="formula-line"><var>resinPP</var><span class="eq">=</span><span class="frac"><span class="num-top"><var>partWeightG</var><span class="op">+</span><var>runnerG</var><span class="op">×</span><span class="paren">(</span><span class="num">1</span><span class="op">−</span><var>regrindRate</var><span class="paren">)</span></span><span class="num-bot"><span class="num">1000</span></span></span><span class="op">×</span><var>resinCostPerKg</var></span>
+        </div>
+        <span class="note"><var>runnerG</var> = <var>partWeightG</var> × <var>runnerPct</var> ÷ <span class="num">100</span> unless overridden. <a href="#m-resin">See methodology ↓</a></span>
       </div>
 
       <div class="output-row" id="row-processing">
@@ -1240,8 +1451,10 @@
         <div class="output-value">$<span id="out-processing">0.0000</span></div>
       </div>
       <div class="formula-inline" id="formula-processing" hidden>
-        <code>machineRate/pph + laborRate/pph + secLP + secMachPP</code>
-        <span class="note">pph = (3600 / cycleTime) × utilization × cavities. <a href="#m-processing">Details ↓</a></span>
+        <div class="formula-display">
+          <span class="formula-line"><var>processing</var><span class="eq">=</span><span class="frac"><span class="num-top"><var>machineRate</var></span><span class="num-bot"><var>pph</var></span></span><span class="op">+</span><span class="frac"><span class="num-top"><var>laborRate</var></span><span class="num-bot"><var>pph</var></span></span><span class="op">+</span><var>secLP</var><span class="op">+</span><var>secMachPP</var></span>
+        </div>
+        <span class="note"><var>pph</var> = <span class="paren">(</span><span class="num">3600</span> ÷ <var>cycleTime</var><span class="paren">)</span> × <var>utilization</var> × <var>cavities</var>. <a href="#m-processing">See methodology ↓</a></span>
       </div>
 
       <div class="output-row" id="row-scrap">
@@ -1251,8 +1464,10 @@
         <div class="output-value">$<span id="out-scrap">0.0000</span></div>
       </div>
       <div class="formula-inline" id="formula-scrap" hidden>
-        <code>(resinPP + machinePP + directLP + secLP) × scrapRate</code>
-        <span class="note">Multiplicative on each cost bucket (not a parts-per-hr reduction). <a href="#m-scrap">Details ↓</a></span>
+        <div class="formula-display">
+          <span class="formula-line"><var>scrap</var><span class="eq">=</span><span class="paren">(</span><var>resinPP</var><span class="op">+</span><var>machinePP</var><span class="op">+</span><var>directLP</var><span class="op">+</span><var>secLP</var><span class="paren">)</span><span class="op">×</span><var>scrapRate</var></span>
+        </div>
+        <span class="note">Multiplicative on each cost bucket (not a parts-per-hr reduction). <a href="#m-scrap">See methodology ↓</a></span>
       </div>
 
       <div class="output-row" id="row-overhead">
@@ -1262,7 +1477,9 @@
         <div class="output-value">$<span id="out-overhead">0.0000</span></div>
       </div>
       <div class="formula-inline" id="formula-overhead" hidden>
-        <code>(directLP + secLP) × ohRate</code>
+        <div class="formula-display">
+          <span class="formula-line"><var>overhead</var><span class="eq">=</span><span class="paren">(</span><var>directLP</var><span class="op">+</span><var>secLP</var><span class="paren">)</span><span class="op">×</span><var>ohRate</var></span>
+        </div>
         <span class="note">Applied to labor only — not machine. <a href="#m-overhead">Details ↓</a></span>
       </div>
 
@@ -1273,7 +1490,9 @@
         <div class="output-value">$<span id="out-profit">0.0000</span></div>
       </div>
       <div class="formula-inline" id="formula-profit" hidden>
-        <code>(mfgSub + duty + sga) × marginRate</code>
+        <div class="formula-display">
+          <span class="formula-line"><var>profit</var><span class="eq">=</span><span class="paren">(</span><var>mfgSub</var><span class="op">+</span><var>duty</var><span class="op">+</span><var>sga</var><span class="paren">)</span><span class="op">×</span><var>marginRate</var></span>
+        </div>
         <span class="note">Markup on landed cost before margin. <a href="#m-profit">Details ↓</a></span>
       </div>
 
@@ -1289,8 +1508,10 @@
         <div class="output-value">$<span id="out-machine-rate">0.00</span></div>
       </div>
       <div class="formula-inline" id="formula-machine" hidden>
-        <code>bracket.baseUSA × region.multiplier</code>
-        <span class="note">Overridden when machineRateOverride is set. <a href="#m-machine">Details ↓</a></span>
+        <div class="formula-display">
+          <span class="formula-line"><var>machineRate</var><span class="eq">=</span><span class="prop"><var>bracket</var><span class="dot">.</span><var>baseUSA</var></span><span class="op">×</span><span class="prop"><var>region</var><span class="dot">.</span><var>multiplier</var></span></span>
+        </div>
+        <span class="note">Overridden when <var>machineRateOverride</var> is set. <a href="#m-machine">Details ↓</a></span>
       </div>
 
       <div class="output-row">
@@ -1309,8 +1530,10 @@
 
         <div class="formula-block" id="m-total">
           <h4><a href="#row-total">↑ Total (with tooling)</a></h4>
-          <code>total = base + toolAmortPP</code>
-          <p>Final per-part cost. Tooling amortization is added on top of the marked-up base; once tooling is paid off it drops to zero and total = base.</p>
+          <div class="formula-display">
+            <span class="formula-line"><var>total</var><span class="eq">=</span><var>base</var><span class="op">+</span><var>toolAmortPP</var></span>
+          </div>
+          <p>Final per-part cost. Tooling amortization is added on top of the marked-up base; once tooling is paid off it drops to zero and <var>total</var> = <var>base</var>.</p>
           <ul class="refs">
             <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L73" target="_blank" rel="noopener">Calc.gs — total assembly</a></li>
           </ul>
@@ -1318,10 +1541,12 @@
 
         <div class="formula-block" id="m-base">
           <h4><a href="#row-base">↑ Base (ex-tooling)</a></h4>
-          <code>mfgSub = matTotal + machTotal + laborTotal + secMachPP + ohTotal + pkg + freight
-totalBeforeMargin = mfgSub × (1 + duty + sga)
-base = totalBeforeMargin × (1 + margin)</code>
-          <p>Standard cost waterfall: manufacturing subtotal → landed (duty + SG&amp;A) → marked-up. Duty and SG&amp;A both hit <code>mfgSub</code>, not each other.</p>
+          <div class="formula-display">
+            <span class="formula-line"><var>mfgSub</var><span class="eq">=</span><var>matTotal</var><span class="op">+</span><var>machTotal</var><span class="op">+</span><var>laborTotal</var><span class="op">+</span><var>secMachPP</var><span class="op">+</span><var>ohTotal</var><span class="op">+</span><var>pkg</var><span class="op">+</span><var>freight</var></span>
+            <span class="formula-line"><var>totalBeforeMargin</var><span class="eq">=</span><var>mfgSub</var><span class="op">×</span><span class="paren">(</span><span class="num">1</span><span class="op">+</span><var>duty</var><span class="op">+</span><var>sga</var><span class="paren">)</span></span>
+            <span class="formula-line"><var>base</var><span class="eq">=</span><var>totalBeforeMargin</var><span class="op">×</span><span class="paren">(</span><span class="num">1</span><span class="op">+</span><var>margin</var><span class="paren">)</span></span>
+          </div>
+          <p>Standard cost waterfall: manufacturing subtotal → landed (duty + SG&amp;A) → marked-up. Duty and SG&amp;A both hit <var>mfgSub</var>, not each other.</p>
           <ul class="refs">
             <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L46-L62" target="_blank" rel="noopener">Calc.gs — base waterfall</a></li>
             <li><a href="https://hts.usitc.gov/" target="_blank" rel="noopener">USITC Harmonized Tariff Schedule (duty lookup)</a></li>
@@ -1330,9 +1555,11 @@ base = totalBeforeMargin × (1 + margin)</code>
 
         <div class="formula-block" id="m-tool">
           <h4><a href="#row-tool">↑ Tooling amortization</a></h4>
-          <code>toolLifeParts = toolLife × cavities
-toolAmortRaw = cumulativeVolume ≥ toolLifeParts ? 0 : toolingCost / toolLifeParts
-toolAmortPP  = toolAmortRaw × (1 + scrapRate)</code>
+          <div class="formula-display">
+            <span class="formula-line"><var>toolLifeParts</var><span class="eq">=</span><var>toolLife</var><span class="op">×</span><var>cavities</var></span>
+            <span class="formula-line"><var>toolAmortRaw</var><span class="eq">=</span><span class="piecewise"><span class="brace">{</span><span class="cases"><span class="case-row"><span class="num">0</span><span class="case-when">if <var>cumulativeVolume</var> ≥ <var>toolLifeParts</var></span></span><span class="case-row"><span class="frac"><span class="num-top"><var>toolingCost</var></span><span class="num-bot"><var>toolLifeParts</var></span></span><span class="case-when">otherwise</span></span></span></span></span>
+            <span class="formula-line"><var>toolAmortPP</var><span class="eq">=</span><var>toolAmortRaw</var><span class="op">×</span><span class="paren">(</span><span class="num">1</span><span class="op">+</span><var>scrapRate</var><span class="paren">)</span></span>
+          </div>
           <p>Even amortization across the tool's rated life in <em>shots</em>, multiplied by cavities to convert to parts. Scrap multiplier accounts for parts lost to defects.</p>
           <ul class="refs">
             <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L64-L70" target="_blank" rel="noopener">Calc.gs — tooling amortization</a></li>
@@ -1342,10 +1569,12 @@ toolAmortPP  = toolAmortRaw × (1 + scrapRate)</code>
 
         <div class="formula-block" id="m-resin">
           <h4><a href="#row-resin">↑ Resin cost</a></h4>
-          <code>runnerG = override ?? (partWeightG × runnerPct / 100)
-grossG  = partWeightG + runnerG × (1 − regrindRate)
-resinPP = (grossG / 1000) × resinCostPerKg</code>
-          <p>Net virgin resin per part = part weight plus the un-recycled portion of runner. <code>regrindRate</code> is the fraction of runner reground and reused; at 1.0 the runner is free, at 0.0 the full runner is consumed.</p>
+          <div class="formula-display">
+            <span class="formula-line"><var>runnerG</var><span class="eq">=</span><var>runnerOverride</var><span class="cond">if set, else</span><var>partWeightG</var><span class="op">×</span><span class="frac"><span class="num-top"><var>runnerPct</var></span><span class="num-bot"><span class="num">100</span></span></span></span>
+            <span class="formula-line"><var>grossG</var><span class="eq">=</span><var>partWeightG</var><span class="op">+</span><var>runnerG</var><span class="op">×</span><span class="paren">(</span><span class="num">1</span><span class="op">−</span><var>regrindRate</var><span class="paren">)</span></span>
+            <span class="formula-line"><var>resinPP</var><span class="eq">=</span><span class="frac"><span class="num-top"><var>grossG</var></span><span class="num-bot"><span class="num">1000</span></span></span><span class="op">×</span><var>resinCostPerKg</var></span>
+          </div>
+          <p>Net virgin resin per part = part weight plus the un-recycled portion of runner. <var>regrindRate</var> is the fraction of runner reground and reused; at 1.0 the runner is free, at 0.0 the full runner is consumed.</p>
           <ul class="refs">
             <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L15-L23" target="_blank" rel="noopener">Calc.gs — material cost</a></li>
             <li><a href="https://www.theplasticsexchange.com/" target="_blank" rel="noopener">Plastics Exchange — spot resin pricing</a></li>
@@ -1354,13 +1583,15 @@ resinPP = (grossG / 1000) × resinCostPerKg</code>
 
         <div class="formula-block" id="m-processing">
           <h4><a href="#row-processing">↑ Processing cost</a></h4>
-          <code>pph        = (3600 / cycleTimeSec) × utilization × cavities
-machinePP  = machineRate / pph
-directLP   = laborRate / pph
-secLP      = laborRate × (secOpsMin / 60)
-secMachPP  = secMachineRate × (secOpsMin / 60)
-processing = machinePP + directLP + secLP + secMachPP</code>
-          <p>Parts/hr drives machine and direct labor; secondary ops add a flat per-part time. Utilization defaults to 0.85 — accounts for changeovers, breaks, and minor stoppages.</p>
+          <div class="formula-display">
+            <span class="formula-line"><var>pph</var><span class="eq">=</span><span class="frac"><span class="num-top"><span class="num">3600</span></span><span class="num-bot"><var>cycleTimeSec</var></span></span><span class="op">×</span><var>utilization</var><span class="op">×</span><var>cavities</var></span>
+            <span class="formula-line"><var>machinePP</var><span class="eq">=</span><span class="frac"><span class="num-top"><var>machineRate</var></span><span class="num-bot"><var>pph</var></span></span></span>
+            <span class="formula-line"><var>directLP</var><span class="eq">=</span><span class="frac"><span class="num-top"><var>laborRate</var></span><span class="num-bot"><var>pph</var></span></span></span>
+            <span class="formula-line"><var>secLP</var><span class="eq">=</span><var>laborRate</var><span class="op">×</span><span class="frac"><span class="num-top"><var>secOpsMin</var></span><span class="num-bot"><span class="num">60</span></span></span></span>
+            <span class="formula-line"><var>secMachPP</var><span class="eq">=</span><var>secMachineRate</var><span class="op">×</span><span class="frac"><span class="num-top"><var>secOpsMin</var></span><span class="num-bot"><span class="num">60</span></span></span></span>
+            <span class="formula-line"><var>processing</var><span class="eq">=</span><var>machinePP</var><span class="op">+</span><var>directLP</var><span class="op">+</span><var>secLP</var><span class="op">+</span><var>secMachPP</var></span>
+          </div>
+          <p>Parts/hr drives machine and direct labor; secondary ops add a flat per-part time. <var>utilization</var> defaults to 0.85 — accounts for changeovers, breaks, and minor stoppages.</p>
           <ul class="refs">
             <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L25-L42" target="_blank" rel="noopener">Calc.gs — machine &amp; labor</a></li>
             <li><a href="https://www.bls.gov/oes/current/oes513011.htm" target="_blank" rel="noopener">US BLS — molding operator wages (OES 51-3011)</a></li>
@@ -1369,11 +1600,13 @@ processing = machinePP + directLP + secLP + secMachPP</code>
 
         <div class="formula-block" id="m-scrap">
           <h4><a href="#row-scrap">↑ Scrap cost</a></h4>
-          <code>matScrap   = resinPP × scrapRate
-machScrap  = machinePP × scrapRate
-laborScrap = (directLP + secLP) × scrapRate
-scrap      = matScrap + machScrap + laborScrap</code>
-          <p>Modeled as a multiplicative uplift on each cost bucket. Note: this is slightly looser than the textbook approach of <code>pph × (1 − scrapRate)</code> good parts; results are within ~1% for scrap &lt; 5%.</p>
+          <div class="formula-display">
+            <span class="formula-line"><var>matScrap</var><span class="eq">=</span><var>resinPP</var><span class="op">×</span><var>scrapRate</var></span>
+            <span class="formula-line"><var>machScrap</var><span class="eq">=</span><var>machinePP</var><span class="op">×</span><var>scrapRate</var></span>
+            <span class="formula-line"><var>laborScrap</var><span class="eq">=</span><span class="paren">(</span><var>directLP</var><span class="op">+</span><var>secLP</var><span class="paren">)</span><span class="op">×</span><var>scrapRate</var></span>
+            <span class="formula-line"><var>scrap</var><span class="eq">=</span><var>matScrap</var><span class="op">+</span><var>machScrap</var><span class="op">+</span><var>laborScrap</var></span>
+          </div>
+          <p>Modeled as a multiplicative uplift on each cost bucket. Note: this is slightly looser than the textbook approach of <var>pph</var> × (1 − <var>scrapRate</var>) good parts; results are within ~1% for scrap &lt; 5%.</p>
           <ul class="refs">
             <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L21-L37" target="_blank" rel="noopener">Calc.gs — scrap multipliers</a></li>
           </ul>
@@ -1381,9 +1614,11 @@ scrap      = matScrap + machScrap + laborScrap</code>
 
         <div class="formula-block" id="m-overhead">
           <h4><a href="#row-overhead">↑ Overhead cost</a></h4>
-          <code>ohRate  = override/100 ?? region.ohRate
-ohTotal = (directLP + secLP) × ohRate</code>
-          <p>Labor-based overhead burden — <em>not</em> applied to machine cost. If <code>ohRate</code> represents a plant-wide overhead, this will under-allocate to machine-heavy parts vs. a full conversion-cost basis.</p>
+          <div class="formula-display">
+            <span class="formula-line"><var>ohRate</var><span class="eq">=</span><span class="frac"><span class="num-top"><var>ohOverride</var></span><span class="num-bot"><span class="num">100</span></span></span><span class="cond">if set, else</span><span class="prop"><var>region</var><span class="dot">.</span><var>ohRate</var></span></span>
+            <span class="formula-line"><var>ohTotal</var><span class="eq">=</span><span class="paren">(</span><var>directLP</var><span class="op">+</span><var>secLP</var><span class="paren">)</span><span class="op">×</span><var>ohRate</var></span>
+          </div>
+          <p>Labor-based overhead burden — <em>not</em> applied to machine cost. If <var>ohRate</var> represents a plant-wide overhead, this will under-allocate to machine-heavy parts vs. a full conversion-cost basis.</p>
           <ul class="refs">
             <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L41-L45" target="_blank" rel="noopener">Calc.gs — overhead</a></li>
           </ul>
@@ -1391,8 +1626,10 @@ ohTotal = (directLP + secLP) × ohRate</code>
 
         <div class="formula-block" id="m-profit">
           <h4><a href="#row-profit">↑ Profit (contribution margin)</a></h4>
-          <code>marginRate = override/100 ?? region.marginRate
-profit     = (mfgSub + duty + sga) × marginRate</code>
+          <div class="formula-display">
+            <span class="formula-line"><var>marginRate</var><span class="eq">=</span><span class="frac"><span class="num-top"><var>marginOverride</var></span><span class="num-bot"><span class="num">100</span></span></span><span class="cond">if set, else</span><span class="prop"><var>region</var><span class="dot">.</span><var>marginRate</var></span></span>
+            <span class="formula-line"><var>profit</var><span class="eq">=</span><span class="paren">(</span><var>mfgSub</var><span class="op">+</span><var>duty</var><span class="op">+</span><var>sga</var><span class="paren">)</span><span class="op">×</span><var>marginRate</var></span>
+          </div>
           <p>Margin applied to landed cost. Region defaults: USA 10%, Mexico 9%, China 8%, Indonesia 8%.</p>
           <ul class="refs">
             <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Calc.gs#L54-L62" target="_blank" rel="noopener">Calc.gs — margin</a></li>
@@ -1401,9 +1638,11 @@ profit     = (mfgSub + duty + sga) × marginRate</code>
 
         <div class="formula-block" id="m-machine">
           <h4><a href="#row-machine">↑ Machine rate ($/hr)</a></h4>
-          <code>bracket  = first { tonnage ≤ maxTons } in TONNAGE_BRACKETS
-machRate = override ?? (bracket.baseUSA × region.multiplier)</code>
-          <p>Tonnage brackets (baseUSA $/hr): 50t→$32, 100t→$42, 200t→$52, 400t→$68, 700t→$88, 1000t→$110, &gt;1000t→$140. Region multipliers: USA 1.00, Mexico 0.615, China 0.538, Indonesia 0.364.</p>
+          <div class="formula-display">
+            <span class="formula-line"><var>bracket</var><span class="eq">=</span>first <span class="paren">{</span><var>tonnage</var> ≤ <var>maxTons</var><span class="paren">}</span> in <var>TONNAGE_BRACKETS</var></span>
+            <span class="formula-line"><var>machRate</var><span class="eq">=</span><var>machineRateOverride</var><span class="cond">if set, else</span><span class="prop"><var>bracket</var><span class="dot">.</span><var>baseUSA</var></span><span class="op">×</span><span class="prop"><var>region</var><span class="dot">.</span><var>multiplier</var></span></span>
+          </div>
+          <p>Tonnage brackets (<var>baseUSA</var> $/hr): 50t→$32, 100t→$42, 200t→$52, 400t→$68, 700t→$88, 1000t→$110, &gt;1000t→$140. Region multipliers: USA 1.00, Mexico 0.615, China 0.538, Indonesia 0.364.</p>
           <ul class="refs">
             <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Data.gs#L54-L62" target="_blank" rel="noopener">Data.gs — tonnage brackets</a></li>
             <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Data.gs#L3-L52" target="_blank" rel="noopener">Data.gs — region multipliers</a></li>
@@ -1412,10 +1651,26 @@ machRate = override ?? (bracket.baseUSA × region.multiplier)</code>
 
         <div class="formula-block" id="m-constants">
           <h4>Region constants reference</h4>
-          <code>USA      labor $28.50  oh 90%  margin 10%  duty 0%   pkg $0.08  freight $0.04  mult 1.000
-Mexico   labor $5.80   oh 60%  margin 9%   duty 0%   pkg $0.07  freight $0.08  mult 0.615
-China    labor $7.20   oh 65%  margin 8%   duty 25%  pkg $0.06  freight $0.18  mult 0.538
-Indonesia labor $2.80  oh 45%  margin 8%   duty 10%  pkg $0.06  freight $0.22  mult 0.364</code>
+          <table class="constants-table">
+            <thead>
+              <tr>
+                <th>Region</th>
+                <th>Labor $/hr</th>
+                <th>OH %</th>
+                <th>Margin %</th>
+                <th>Duty %</th>
+                <th>Pkg $</th>
+                <th>Freight $</th>
+                <th>Mult</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>USA</td><td>$28.50</td><td>90%</td><td>10%</td><td>0%</td><td>$0.08</td><td>$0.04</td><td>1.000</td></tr>
+              <tr><td>Mexico</td><td>$5.80</td><td>60%</td><td>9%</td><td>0%</td><td>$0.07</td><td>$0.08</td><td>0.615</td></tr>
+              <tr><td>China</td><td>$7.20</td><td>65%</td><td>8%</td><td>25%</td><td>$0.06</td><td>$0.18</td><td>0.538</td></tr>
+              <tr><td>Indonesia</td><td>$2.80</td><td>45%</td><td>8%</td><td>10%</td><td>$0.06</td><td>$0.22</td><td>0.364</td></tr>
+            </tbody>
+          </table>
           <p>Labor rates are fully-burdened $/hr. Duty assumes Section 301 list for China; revisit if HTS code carries a different rate.</p>
           <ul class="refs">
             <li><a href="https://github.com/JelalG/should-cost-tool/blob/main/Data.gs" target="_blank" rel="noopener">Data.gs — full region table</a></li>
