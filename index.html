@@ -1620,14 +1620,21 @@
 
   // Delete part
   async function handleDeletePart(key) {
-    if (confirm('Delete this part?')) {
-      try {
-        await runServer('deletePart', key);
-        await loadPartsList();
-        showToast('Part deleted');
-      } catch (e) {
-        showToast('Delete failed: ' + e.message, 'error');
-      }
+    const part = savedParts.find(p => p.key === key);
+    const label = part && ((part.partName || part.partNumber || '').toString().trim()) || 'this part';
+    const ok = await showConfirm({
+      title: 'Delete saved part?',
+      message: 'You are about to delete ' + label + ' from the library. This cannot be undone.',
+      confirmLabel: 'Delete part',
+      cancelLabel: 'Cancel'
+    });
+    if (!ok) return;
+    try {
+      await runServer('deletePart', key);
+      await loadPartsList();
+      showToast('Part deleted');
+    } catch (e) {
+      showToast('Delete failed: ' + e.message, 'error');
     }
   }
 
