@@ -951,12 +951,43 @@
     setState(patch);
   }
 
+  // Resolve regional/computed defaults into override slots so the saved row
+  // captures the exact rates used at save time. Fields the user explicitly
+  // overrode are left alone.
+  function resolveDefaultsForSave(s) {
+    const REGIONS = {
+      USA: { laborRate: 28.50, ohRate: 0.90, marginRate: 0.10, multiplier: 1.00 },
+      Mexico: { laborRate: 5.80, ohRate: 0.60, marginRate: 0.09, multiplier: 0.615 },
+      China: { laborRate: 7.20, ohRate: 0.65, marginRate: 0.08, multiplier: 0.538 },
+      Indonesia: { laborRate: 2.80, ohRate: 0.45, marginRate: 0.08, multiplier: 0.364 }
+    };
+    const TONNAGE_BRACKETS = [
+      { maxTons: 50, baseUSA: 32 }, { maxTons: 100, baseUSA: 42 }, { maxTons: 200, baseUSA: 52 },
+      { maxTons: 400, baseUSA: 68 }, { maxTons: 700, baseUSA: 88 }, { maxTons: 1000, baseUSA: 110 },
+      { maxTons: 9999, baseUSA: 140 }
+    ];
+    const r = REGIONS[s.region] || REGIONS.Mexico;
+    const bracket = TONNAGE_BRACKETS.find(b => s.tonnage <= b.maxTons) || TONNAGE_BRACKETS[TONNAGE_BRACKETS.length - 1];
+    const blank = v => v === null || v === undefined || v === '';
+    const out = { ...s };
+    if (blank(out.machineRateOverride)) out.machineRateOverride = +(bracket.baseUSA * r.multiplier).toFixed(4);
+    if (blank(out.laborRateOverride))   out.laborRateOverride   = r.laborRate;
+    if (blank(out.ohRateOverride))      out.ohRateOverride      = +(r.ohRate * 100).toFixed(2);
+    if (blank(out.marginRateOverride))  out.marginRateOverride  = +(r.marginRate * 100).toFixed(2);
+    if (blank(out.runnerWeightOverride) && !blank(out.partWeightG) && !blank(out.runnerPct)) {
+      out.runnerWeightOverride = +(out.partWeightG * out.runnerPct / 100).toFixed(4);
+    }
+    return out;
+  }
+
   // Save part to library
   async function handleSave() {
     if (isSaving) return;
     isSaving = true;
     try {
-      const key = await runServer('savePart', JSON.stringify(state));
+      const payload = resolveDefaultsForSave(state);
+      setState(payload);
+      const key = await runServer('savePart', JSON.stringify(payload));
       showToast('Part saved!');
       await loadPartsList();
     } catch (e) {
