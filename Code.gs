@@ -2,9 +2,15 @@
 
 function doGet() {
   return HtmlService
-    .createHtmlOutputFromFile('index')
+    .createTemplateFromFile('index')
+    .evaluate()
     .setTitle('Should Cost: Injection Mold')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+// Inline another HTML file into a template via <?!= include('name'); ?>
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
 // Get or create the Parts Library sheet with a header row

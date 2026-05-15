@@ -1,0 +1,608 @@
+<script>
+  // DEFAULTS — the blank/new-part editor state. Text fields go '', numerics go null.
+  // Placeholders in the markup hint at sample values without committing them.
+  const DEFAULTS = {
+    partNumber: '',
+    partName: '',
+    region: '',
+    partWeightG: null,
+    runnerPct: null,
+    runnerWeightOverride: null,
+    regrindRate: null,
+    cavities: null,
+    cycleTimeSec: null,
+    utilization: null,
+    scrapRate: null,
+    resinCostPerKg: null,
+    tonnage: null,
+    machineRateOverride: null,
+    laborRateOverride: null,
+    ohRateOverride: null,
+    marginRateOverride: null,
+    toolingCost: null,
+    toolLife: null,
+    cumulativeVolume: null
+  };
+
+  // Global state
+  let state = { ...DEFAULTS };
+  let savedParts = [];
+  let selectedPartKeys = new Set();
+  let isSaving = false;
+
+  // Helper to run server functions
+  function runServer(fn, ...args) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        [fn](...args);
+    });
+  }
+
+  // Update state and recalculate
+  function setState(patch) {
+    state = { ...state, ...patch };
+    recalculate();
+    renderOutputs();
+    updateToolBar();
+    updateBadges();
+  }
+
+  // Add event listeners for all inputs
+  function attachInputListeners() {
+    const inputs = ['partNumber', 'partName', 'region', 'partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'machineRateOverride', 'laborRateOverride', 'ohRateOverride', 'marginRateOverride', 'toolingCost', 'toolLife', 'cumulativeVolume'];
+
+    inputs.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('input', (e) => {
+          let val;
+          if (e.target.type === 'number' || e.target.type === 'range') {
+            if (e.target.value === '') {
+              val = null;
+            } else {
+              val = parseFloat(e.target.value);
+              if (Number.isFinite(val)) {
+                const min = e.target.min !== '' ? parseFloat(e.target.min) : null;
+                const max = e.target.max !== '' ? parseFloat(e.target.max) : null;
+                if (min !== null && val < min) { val = min; e.target.value = String(min); }
+                if (max !== null && val > max) { val = max; e.target.value = String(max); }
+              }
+            }
+          } else {
+            val = e.target.value;
+          }
+          setState({ [id]: val });
+        });
+      }
+    });
+  }
+
+  // Client-side cost calculation (mirrors Calc.gs)
+  function calcSC(inp) {
+    const REGIONS = {
+      USA: { laborRate: 28.50, secMachineRate: 10.0, secOpsMin: 0.25, ohRate: 0.90, sgaRate: 0.07, marginRate: 0.10, pkg: 0.08, freight: 0.04, duty: 0.00, multiplier: 1.00 },
+      Mexico: { laborRate: 5.80, secMachineRate: 6.5, secOpsMin: 0.30, ohRate: 0.60, sgaRate: 0.06, marginRate: 0.09, pkg: 0.07, freight: 0.08, duty: 0.00, multiplier: 0.615 },
+      China: { laborRate: 7.20, secMachineRate: 5.5, secOpsMin: 0.35, ohRate: 0.65, sgaRate: 0.07, marginRate: 0.08, pkg: 0.06, freight: 0.18, duty: 0.25, multiplier: 0.538 },
+      Indonesia: { laborRate: 2.80, secMachineRate: 4.0, secOpsMin: 0.45, ohRate: 0.45, sgaRate: 0.05, marginRate: 0.08, pkg: 0.06, freight: 0.22, duty: 0.10, multiplier: 0.364 }
+    };
+
+    const TONNAGE_BRACKETS = [
+      { maxTons: 50, baseUSA: 32 }, { maxTons: 100, baseUSA: 42 }, { maxTons: 200, baseUSA: 52 },
+      { maxTons: 400, baseUSA: 68 }, { maxTons: 700, baseUSA: 88 }, { maxTons: 1000, baseUSA: 110 },
+      { maxTons: 9999, baseUSA: 140 }
+    ];
+
+    const r = REGIONS[inp.region] || REGIONS.Mexico;
+    const bracket = TONNAGE_BRACKETS.find(b => inp.tonnage <= b.maxTons) || TONNAGE_BRACKETS[TONNAGE_BRACKETS.length - 1];
+    const results = {};
+
+    const machineRate = inp.machineRateOverride !== null && inp.machineRateOverride !== undefined ? inp.machineRateOverride : (bracket.baseUSA * r.multiplier);
+    results._machineRate = machineRate;
+
+    const runnerWeightG = inp.runnerWeightOverride !== null && inp.runnerWeightOverride !== undefined ? inp.runnerWeightOverride : (inp.partWeightG * inp.runnerPct / 100);
+    const grossG = inp.partWeightG + (runnerWeightG * (1 - inp.regrindRate));
+    const grossKg = grossG / 1000;
+    const resinPP = grossKg * inp.resinCostPerKg;
+    const matScrap = resinPP * inp.scrapRate;
+    const matTotal = resinPP + matScrap;
+    results.resinCostPerPart = resinPP;
+
+    const partsPerHr = (3600 / inp.cycleTimeSec) * inp.utilization * inp.cavities;
+    const machPP = machineRate / partsPerHr;
+    const machScrap = machPP * inp.scrapRate;
+    const machTotal = machPP + machScrap;
+
+    const laborRate = inp.laborRateOverride !== null && inp.laborRateOverride !== undefined ? inp.laborRateOverride : r.laborRate;
+    const directLP = laborRate / partsPerHr;
+    const secLP = laborRate * (r.secOpsMin / 60);
+    const laborScrap = (directLP + secLP) * inp.scrapRate;
+    const laborTotal = directLP + secLP + laborScrap;
+
+    const secMachPP = r.secMachineRate * (r.secOpsMin / 60);
+    const ohRate = inp.ohRateOverride !== null && inp.ohRateOverride !== undefined ? (inp.ohRateOverride / 100) : r.ohRate;
+    const ohTotal = (directLP + secLP) * ohRate;
+    const pkgFreight = r.pkg + r.freight;
+    const mfgSubBase = matTotal + machTotal + laborTotal + secMachPP + ohTotal + pkgFreight;
+    const duty = mfgSubBase * r.duty;
+    const sga = mfgSubBase * r.sgaRate;
+    results.processingCostPerPart = machPP + directLP + secLP + secMachPP;
+    results.scrapCostPerPart = matScrap + machScrap + laborScrap;
+    results.overheadCostPerPart = ohTotal;
+
+    const marginRate = inp.marginRateOverride !== null && inp.marginRateOverride !== undefined ? (inp.marginRateOverride / 100) : r.marginRate;
+    const totalBeforeMargin = mfgSubBase + duty + sga;
+    const profit = totalBeforeMargin * marginRate;
+    const baseTotal = totalBeforeMargin + profit;
+    results.profit = profit;
+    results._baseTotal = baseTotal;
+
+    const toolLifeParts = inp.toolLife * inp.cavities;
+    const toolPaidOff = inp.cumulativeVolume >= toolLifeParts;
+    const toolAmortRaw = toolPaidOff ? 0 : inp.toolingCost / toolLifeParts;
+    const toolScrap = toolAmortRaw * inp.scrapRate;
+    const toolAmortPP = toolAmortRaw + toolScrap;
+    results._toolAmortPP = toolAmortPP;
+    results._totalWithTooling = baseTotal + toolAmortPP;
+    results._toolPaidOff = toolPaidOff;
+    results._toolLifeParts = toolLifeParts;
+    results._toolPctUsed = Math.min((inp.cumulativeVolume / toolLifeParts) * 100, 100);
+
+    return results;
+  }
+
+  // Toggle inline formula rows beneath an output row
+  function toggleFormula(btn) {
+    const target = document.getElementById(btn.getAttribute('aria-controls'));
+    if (!target) return;
+    const open = btn.getAttribute('aria-expanded') === 'true';
+    btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+    target.hidden = open;
+  }
+
+  // Recalculate outputs
+  function recalculate() {
+    // Sync input fields from state, but never overwrite the one the user is typing into —
+    // partial values like "0." parse to 0, and writing 0 back would strip the trailing dot mid-keystroke.
+    const active = document.activeElement;
+    Object.keys(state).forEach(key => {
+      const el = document.getElementById(key);
+      if (el && key !== 'key' && el !== active) {
+        el.value = state[key] !== null && state[key] !== undefined ? state[key] : '';
+      }
+    });
+  }
+
+  // Fields required for a meaningful calc; if any are blank, outputs show "—".
+  const REQUIRED_FOR_CALC = ['region', 'partWeightG', 'runnerPct', 'regrindRate', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'toolingCost', 'toolLife', 'cumulativeVolume'];
+
+  function isCalcReady(s) {
+    return REQUIRED_FOR_CALC.every(k => {
+      const v = s[k];
+      if (v === null || v === undefined || v === '') return false;
+      if (k === 'region') return true;
+      return !isNaN(Number(v));
+    });
+  }
+
+  function fmt(n, decimals) {
+    return (typeof n === 'number' && isFinite(n)) ? n.toFixed(decimals) : '—';
+  }
+
+  // Render output cards and table
+  function renderOutputs() {
+    if (!isCalcReady(state)) {
+      ['total-with-tooling', 'base-total', 'tool-amort', 'resin-cost', 'processing-cost', 'profit',
+       'out-total-with-tooling', 'out-base-total', 'out-tool-amort', 'out-resin', 'out-processing',
+       'out-scrap', 'out-overhead', 'out-profit', 'out-machine-rate']
+        .forEach(id => { document.getElementById(id).textContent = '—'; });
+      document.getElementById('out-region').textContent = state.region || '—';
+      document.getElementById('out-cavities').textContent = state.cavities ?? '—';
+      document.getElementById('out-cycle-time').textContent = state.cycleTimeSec ?? '—';
+      return;
+    }
+
+    const result = calcSC(state);
+
+    document.getElementById('total-with-tooling').textContent = fmt(result._totalWithTooling, 4);
+    document.getElementById('base-total').textContent = fmt(result._baseTotal, 4);
+    document.getElementById('tool-amort').textContent = fmt(result._toolAmortPP, 4);
+    document.getElementById('resin-cost').textContent = fmt(result.resinCostPerPart, 4);
+    document.getElementById('processing-cost').textContent = fmt(result.processingCostPerPart, 4);
+    document.getElementById('profit').textContent = fmt(result.profit, 4);
+
+    document.getElementById('out-total-with-tooling').textContent = fmt(result._totalWithTooling, 4);
+    document.getElementById('out-base-total').textContent = fmt(result._baseTotal, 4);
+    document.getElementById('out-tool-amort').textContent = fmt(result._toolAmortPP, 4);
+    document.getElementById('out-resin').textContent = fmt(result.resinCostPerPart, 4);
+    document.getElementById('out-processing').textContent = fmt(result.processingCostPerPart, 4);
+    document.getElementById('out-scrap').textContent = fmt(result.scrapCostPerPart, 4);
+    document.getElementById('out-overhead').textContent = fmt(result.overheadCostPerPart, 4);
+    document.getElementById('out-profit').textContent = fmt(result.profit, 4);
+    document.getElementById('out-region').textContent = state.region;
+    document.getElementById('out-machine-rate').textContent = fmt(result._machineRate, 2);
+    document.getElementById('out-cavities').textContent = state.cavities;
+    document.getElementById('out-cycle-time').textContent = state.cycleTimeSec;
+  }
+
+  // Update tooling progress bar
+  function updateToolBar() {
+    const fill = document.getElementById('tool-bar-fill');
+    const label = document.getElementById('tool-bar-label');
+
+    const css = getComputedStyle(document.documentElement);
+    const tokenGrounded = css.getPropertyValue('--grounded').trim() || '#1E4D2B';
+    const tokenWarn     = css.getPropertyValue('--yellow-60').trim() || '#AA8422';
+    const tokenDanger   = css.getPropertyValue('--energy').trim()    || '#ED6C30';
+
+    if (!isCalcReady(state)) {
+      fill.style.width = '0%';
+      fill.style.background = tokenGrounded;
+      label.textContent = '';
+      return;
+    }
+
+    const result = calcSC(state);
+    fill.style.width = result._toolPctUsed + '%';
+    fill.style.background = result._toolPaidOff ? tokenDanger : (result._toolPctUsed > 75 ? tokenWarn : tokenGrounded);
+    label.textContent = result._toolPaidOff ? 'Tool fully amortized — tooling cost = $0/pc' : ((result._toolLifeParts - state.cumulativeVolume).toLocaleString()) + ' parts remaining on tool';
+  }
+
+  // Update override badges
+  function updateBadges() {
+    const REGIONS = {
+      USA: { laborRate: 28.50, ohRate: 0.90, marginRate: 0.10 },
+      Mexico: { laborRate: 5.80, ohRate: 0.60, marginRate: 0.09 },
+      China: { laborRate: 7.20, ohRate: 0.65, marginRate: 0.08 },
+      Indonesia: { laborRate: 2.80, ohRate: 0.45, marginRate: 0.08 }
+    };
+    const r = REGIONS[state.region] || REGIONS.Mexico;
+
+    // Machine rate badge
+    const machOverride = state.machineRateOverride !== null && state.machineRateOverride !== undefined;
+    document.getElementById('machine-rate-badge').className = 'override-badge ' + (machOverride ? 'override' : 'default');
+    document.getElementById('machine-rate-badge').textContent = (machOverride ? 'override: $' : 'default: ') + (machOverride ? state.machineRateOverride.toFixed(2) : 'auto-resolved') + (machOverride ? '/hr' : '');
+
+    // Labor rate badge
+    const laborOverride = state.laborRateOverride !== null && state.laborRateOverride !== undefined;
+    document.getElementById('labor-rate-badge').className = 'override-badge ' + (laborOverride ? 'override' : 'default');
+    document.getElementById('labor-rate-badge').textContent = (laborOverride ? 'override: $' : 'default: $') + (laborOverride ? state.laborRateOverride.toFixed(2) : r.laborRate.toFixed(2)) + '/hr';
+
+    // OH rate badge
+    const ohOverride = state.ohRateOverride !== null && state.ohRateOverride !== undefined;
+    document.getElementById('oh-rate-badge').className = 'override-badge ' + (ohOverride ? 'override' : 'default');
+    document.getElementById('oh-rate-badge').textContent = (ohOverride ? 'override: ' : 'default: ') + (ohOverride ? state.ohRateOverride.toFixed(1) : (r.ohRate * 100).toFixed(1)) + '%';
+
+    // Margin rate badge
+    const marginOverride = state.marginRateOverride !== null && state.marginRateOverride !== undefined;
+    document.getElementById('margin-rate-badge').className = 'override-badge ' + (marginOverride ? 'override' : 'default');
+    document.getElementById('margin-rate-badge').textContent = (marginOverride ? 'override: ' : 'default: ') + (marginOverride ? state.marginRateOverride.toFixed(1) : (r.marginRate * 100).toFixed(1)) + '%';
+
+    // Update override input styles
+    document.getElementById('machineRateOverride').className = state.machineRateOverride ? 'input-field override' : 'input-field';
+    document.getElementById('laborRateOverride').className = state.laborRateOverride ? 'input-field override' : 'input-field';
+    document.getElementById('ohRateOverride').className = state.ohRateOverride ? 'input-field override' : 'input-field';
+    document.getElementById('marginRateOverride').className = state.marginRateOverride ? 'input-field override' : 'input-field';
+  }
+
+  // Fields that are text (cleared to '') vs numbers (cleared to null).
+  const TEXT_FIELDS = new Set(['partNumber', 'partName', 'region']);
+
+  // Reset section to blank — numeric inputs go null, text inputs go ''.
+  function resetSection(section) {
+    const resetMap = {
+      part: ['partNumber', 'partName', 'region', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate'],
+      resin: ['partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'resinCostPerKg'],
+      machine: ['tonnage', 'machineRateOverride'],
+      labor: ['laborRateOverride', 'ohRateOverride'],
+      margin: ['marginRateOverride'],
+      tooling: ['toolingCost', 'toolLife', 'cumulativeVolume']
+    };
+    const keys = resetMap[section] || [];
+    const patch = {};
+    keys.forEach(key => {
+      patch[key] = TEXT_FIELDS.has(key) ? '' : null;
+    });
+    setState(patch);
+  }
+
+  // Resolve regional/computed defaults into override slots so the saved row
+  // captures the exact rates used at save time. Fields the user explicitly
+  // overrode are left alone.
+  function resolveDefaultsForSave(s) {
+    const REGIONS = {
+      USA: { laborRate: 28.50, ohRate: 0.90, marginRate: 0.10, multiplier: 1.00 },
+      Mexico: { laborRate: 5.80, ohRate: 0.60, marginRate: 0.09, multiplier: 0.615 },
+      China: { laborRate: 7.20, ohRate: 0.65, marginRate: 0.08, multiplier: 0.538 },
+      Indonesia: { laborRate: 2.80, ohRate: 0.45, marginRate: 0.08, multiplier: 0.364 }
+    };
+    const TONNAGE_BRACKETS = [
+      { maxTons: 50, baseUSA: 32 }, { maxTons: 100, baseUSA: 42 }, { maxTons: 200, baseUSA: 52 },
+      { maxTons: 400, baseUSA: 68 }, { maxTons: 700, baseUSA: 88 }, { maxTons: 1000, baseUSA: 110 },
+      { maxTons: 9999, baseUSA: 140 }
+    ];
+    const r = REGIONS[s.region] || REGIONS.Mexico;
+    const bracket = TONNAGE_BRACKETS.find(b => s.tonnage <= b.maxTons) || TONNAGE_BRACKETS[TONNAGE_BRACKETS.length - 1];
+    const blank = v => v === null || v === undefined || v === '';
+    const out = { ...s };
+    if (blank(out.machineRateOverride)) out.machineRateOverride = +(bracket.baseUSA * r.multiplier).toFixed(4);
+    if (blank(out.laborRateOverride))   out.laborRateOverride   = r.laborRate;
+    if (blank(out.ohRateOverride))      out.ohRateOverride      = +(r.ohRate * 100).toFixed(2);
+    if (blank(out.marginRateOverride))  out.marginRateOverride  = +(r.marginRate * 100).toFixed(2);
+    if (blank(out.runnerWeightOverride) && !blank(out.partWeightG) && !blank(out.runnerPct)) {
+      out.runnerWeightOverride = +(out.partWeightG * out.runnerPct / 100).toFixed(4);
+    }
+    return out;
+  }
+
+  // Save part to library
+  async function handleSave() {
+    if (isSaving) return;
+    const existing = state.key && savedParts.find(p => p.key === state.key);
+    if (existing) {
+      const label = (state.partName || state.partNumber || existing.partName || existing.partNumber || 'this part').toString().trim() || 'this part';
+      const ok = await showConfirm({
+        title: 'Update existing part?',
+        message: 'You are about to overwrite the saved version of ' + label + '.',
+        confirmLabel: 'Update part',
+        cancelLabel: 'Cancel'
+      });
+      if (!ok) return;
+    }
+    isSaving = true;
+    try {
+      const payload = resolveDefaultsForSave(state);
+      setState(payload);
+      const key = await runServer('savePart', JSON.stringify(payload));
+      if (key) state.key = key;
+      showToast(existing ? 'Part updated' : 'Part saved');
+      await loadPartsList();
+      updateSaveButton();
+    } catch (e) {
+      showToast('Save failed: ' + e.message, 'error');
+    } finally {
+      isSaving = false;
+    }
+  }
+
+  // Reflect whether we're editing a saved part on the primary CTA label.
+  function updateSaveButton() {
+    const btn = document.getElementById('save-btn');
+    if (!btn) return;
+    const isEditing = state.key && savedParts.some(p => p.key === state.key);
+    btn.textContent = isEditing ? 'Update part' : 'Save part to library';
+  }
+
+  // In-app confirmation dialog. Returns a Promise<boolean>.
+  function showConfirm({ title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel' }) {
+    return new Promise(resolve => {
+      const backdrop = document.createElement('div');
+      backdrop.className = 'modal-backdrop';
+      backdrop.setAttribute('role', 'dialog');
+      backdrop.setAttribute('aria-modal', 'true');
+
+      const dialog = document.createElement('div');
+      dialog.className = 'modal-dialog';
+
+      const h = document.createElement('h3');
+      h.className = 'modal-title';
+      h.textContent = title;
+
+      const p = document.createElement('p');
+      p.className = 'modal-body';
+      p.textContent = message;
+
+      const actions = document.createElement('div');
+      actions.className = 'modal-actions';
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'modal-btn';
+      cancelBtn.textContent = cancelLabel;
+
+      const okBtn = document.createElement('button');
+      okBtn.type = 'button';
+      okBtn.className = 'modal-btn primary';
+      okBtn.textContent = confirmLabel;
+
+      actions.append(cancelBtn, okBtn);
+      dialog.append(h, p, actions);
+      backdrop.append(dialog);
+
+      function close(result) {
+        document.removeEventListener('keydown', onKey);
+        backdrop.remove();
+        resolve(result);
+      }
+      function onKey(e) {
+        if (e.key === 'Escape') close(false);
+        else if (e.key === 'Enter') close(true);
+      }
+
+      cancelBtn.addEventListener('click', () => close(false));
+      okBtn.addEventListener('click', () => close(true));
+      backdrop.addEventListener('click', e => { if (e.target === backdrop) close(false); });
+      document.addEventListener('keydown', onKey);
+
+      document.body.appendChild(backdrop);
+      okBtn.focus();
+    });
+  }
+
+  // Load parts list
+  async function loadPartsList() {
+    try {
+      const json = await runServer('loadAllParts');
+      savedParts = JSON.parse(json);
+      renderPartsList();
+      updateSaveButton();
+    } catch (e) {
+      console.error('Load failed:', e);
+    }
+  }
+
+  // Render parts list — builds DOM nodes (no innerHTML) so saved part names cannot inject HTML/JS.
+  // Only shows results matching the search query; empty query = hidden list.
+  function renderPartsList() {
+    const container = document.getElementById('parts-list');
+    const help = document.getElementById('parts-search-help');
+    const searchEl = document.getElementById('parts-search');
+    const q = (searchEl ? searchEl.value : '').trim().toLowerCase();
+
+    document.getElementById('selected-count').textContent = selectedPartKeys.size;
+
+    container.replaceChildren();
+
+    if (!q) {
+      container.style.display = 'none';
+      help.textContent = savedParts.length
+        ? 'Start typing to search ' + savedParts.length + ' saved part' + (savedParts.length === 1 ? '' : 's') + '.'
+        : 'No saved parts yet — save one below to get started.';
+      return;
+    }
+
+    const matches = savedParts.filter(p =>
+      (p.partNumber || '').toLowerCase().includes(q) ||
+      (p.partName || '').toLowerCase().includes(q)
+    );
+
+    if (matches.length === 0) {
+      container.style.display = 'none';
+      help.textContent = 'No matches for "' + q + '".';
+      return;
+    }
+
+    container.style.display = '';
+    help.textContent = matches.length + ' match' + (matches.length === 1 ? '' : 'es') + '.';
+
+    matches.forEach(part => {
+      const item = document.createElement('div');
+      item.className = 'part-item';
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = selectedPartKeys.has(part.key);
+      cb.addEventListener('change', (e) => togglePartSelection(part.key, e.target.checked));
+
+      const label = document.createElement('label');
+      label.className = 'part-item-label';
+      label.style.cursor = 'pointer';
+      label.textContent = (part.partNumber || 'N/A') + ' - ' + (part.partName || 'Unnamed');
+      label.addEventListener('click', () => loadPart(part.key));
+
+      const del = document.createElement('button');
+      del.className = 'part-item-delete';
+      del.textContent = 'Delete';
+      del.addEventListener('click', () => handleDeletePart(part.key));
+
+      item.append(cb, label, del);
+      container.appendChild(item);
+    });
+  }
+
+  // Load part into editor
+  function loadPart(key) {
+    const part = savedParts.find(p => p.key === key);
+    if (part) {
+      state = { ...part };
+      recalculate();
+      renderOutputs();
+      updateToolBar();
+      updateBadges();
+      updateSaveButton();
+    }
+  }
+
+  // Toggle part selection for export
+  function togglePartSelection(key, checked) {
+    if (checked) {
+      selectedPartKeys.add(key);
+    } else {
+      selectedPartKeys.delete(key);
+    }
+    document.getElementById('selected-count').textContent = selectedPartKeys.size;
+  }
+
+  // Delete part
+  async function handleDeletePart(key) {
+    const part = savedParts.find(p => p.key === key);
+    const label = part && ((part.partName || part.partNumber || '').toString().trim()) || 'this part';
+    const ok = await showConfirm({
+      title: 'Delete saved part?',
+      message: 'You are about to delete ' + label + ' from the library. This cannot be undone.',
+      confirmLabel: 'Delete part',
+      cancelLabel: 'Cancel'
+    });
+    if (!ok) return;
+    try {
+      await runServer('deletePart', key);
+      const wasViewing = state.key === key;
+      await loadPartsList();
+      if (wasViewing) {
+        state = { ...DEFAULTS };
+        selectedPartKeys.delete(key);
+        recalculate();
+        renderOutputs();
+        updateToolBar();
+        updateBadges();
+        updateSaveButton();
+      }
+      showToast('Part deleted');
+    } catch (e) {
+      showToast('Delete failed: ' + e.message, 'error');
+    }
+  }
+
+  // Export selected parts
+  async function handleExport() {
+    if (selectedPartKeys.size === 0) {
+      showToast('Select parts to export', 'error');
+      return;
+    }
+    const selected = savedParts.filter(p => selectedPartKeys.has(p.key));
+    try {
+      const url = await runServer('exportPartsToSheet', JSON.stringify(selected));
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.click();
+      showToast('Export complete. Opening sheet…');
+    } catch (e) {
+      showToast('Export failed: ' + e.message, 'error');
+    }
+  }
+
+  // New part
+  function handleNewPart() {
+    state = { ...DEFAULTS };
+    selectedPartKeys.clear();
+    recalculate();
+    renderOutputs();
+    updateToolBar();
+    updateBadges();
+    updateSaveButton();
+    showToast('New part started');
+  }
+
+  // Show toast notification
+  function showToast(msg, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = 'toast' + (type === 'error' ? ' error' : '');
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+  }
+
+  // Initialize on load
+  window.addEventListener('DOMContentLoaded', async () => {
+    attachInputListeners();
+    const searchEl = document.getElementById('parts-search');
+    if (searchEl) searchEl.addEventListener('input', renderPartsList);
+    await loadPartsList();
+    recalculate();
+    renderOutputs();
+    updateToolBar();
+    updateBadges();
+  });
+</script>
