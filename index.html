@@ -562,6 +562,130 @@
       border-left: 1px solid var(--grey-10);
     }
 
+    .formula-toggle {
+      background: none;
+      border: 0;
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--grey-60);
+      padding: 0 4px;
+      margin-left: 6px;
+      line-height: 1;
+      border-radius: 3px;
+      transition: color 100ms ease, background 100ms ease;
+    }
+    .formula-toggle:hover { color: var(--grounded); background: var(--green-5); }
+    .formula-toggle[aria-expanded="true"] { color: var(--grounded); background: var(--green-5); }
+
+    .formula-inline {
+      background: var(--green-5);
+      padding: 10px 16px 12px;
+      font-size: 12px;
+      color: var(--grey-80);
+      border-bottom: 1px solid var(--grey-10);
+    }
+    .formula-inline[hidden] { display: none; }
+    .formula-inline code {
+      font-family: var(--font-mono);
+      background: var(--strike);
+      padding: 3px 8px;
+      border-radius: 4px;
+      display: inline-block;
+      color: var(--terminal);
+      font-size: 11px;
+      letter-spacing: -0.005em;
+    }
+    .formula-inline .note {
+      display: block;
+      margin-top: 6px;
+    }
+    .formula-inline a {
+      color: var(--grounded);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .methodology {
+      margin-top: 20px;
+      background: var(--strike);
+      border: 1px solid var(--grey-20);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+    .methodology > summary {
+      cursor: pointer;
+      padding: 12px 16px;
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--grounded);
+      list-style: none;
+      user-select: none;
+      background: var(--green-5);
+      border-bottom: 1px solid var(--grey-10);
+    }
+    .methodology > summary::-webkit-details-marker { display: none; }
+    .methodology > summary::before {
+      content: '▸ ';
+      display: inline-block;
+      transition: transform 120ms ease;
+      transform-origin: center;
+    }
+    .methodology[open] > summary::before { content: '▾ '; }
+    .methodology-body { padding: 4px 0; }
+    .formula-block {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--grey-10);
+    }
+    .formula-block:last-child { border-bottom: none; }
+    .formula-block h4 {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--grounded);
+      margin-bottom: 8px;
+      letter-spacing: -0.005em;
+    }
+    .formula-block h4 a {
+      color: inherit;
+      text-decoration: none;
+    }
+    .formula-block h4 a:hover { text-decoration: underline; }
+    .formula-block code {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      background: var(--conduit);
+      padding: 6px 10px;
+      border-radius: 4px;
+      display: block;
+      color: var(--terminal);
+      margin-bottom: 8px;
+      white-space: pre-wrap;
+    }
+    .formula-block p {
+      font-size: 12px;
+      color: var(--grey-80);
+      margin-bottom: 8px;
+    }
+    .formula-block .refs {
+      list-style: none;
+      font-size: 11px;
+      color: var(--grey-60);
+    }
+    .formula-block .refs li {
+      padding: 2px 0;
+    }
+    .formula-block .refs a {
+      color: var(--grounded);
+      text-decoration: none;
+      border-bottom: 1px dotted var(--grey-40);
+    }
+    .formula-block .refs a:hover { border-bottom-color: var(--grounded); }
+    .formula-block .refs li::before {
+      content: '↗ ';
+      color: var(--grey-40);
+      margin-right: 2px;
+    }
+
     .parts-list {
       background: var(--strike);
       border: 1px solid var(--grey-20);
