@@ -88,13 +88,7 @@
       left: 0;
       right: 0;
       height: 4px;
-      background:
-        linear-gradient(90deg,
-          var(--grounded) 0%,
-          var(--grounded) 55%,
-          var(--green-60) 70%,
-          var(--energy) 88%,
-          var(--energy) 100%);
+      background: var(--grounded);
     }
 
     #header-bar::after {
@@ -104,8 +98,7 @@
       right: 0;
       width: 64px;
       height: 4px;
-      background: linear-gradient(90deg, transparent 0%, var(--energy) 100%);
-      box-shadow: 0 0 12px rgba(237, 108, 48, 0.45);
+      background: var(--energy);
     }
 
     #header-logo {
@@ -205,7 +198,7 @@
     .section:hover { box-shadow: var(--shadow-md); }
 
     .section-header {
-      background: linear-gradient(180deg, var(--strike) 0%, var(--grey-10) 100%);
+      background: var(--grey-10);
       color: var(--grey-80);
       padding: 11px 14px 10px 16px;
       display: flex;
@@ -468,19 +461,17 @@
     }
 
     .summary-card.highlight {
-      background:
-        radial-gradient(120% 140% at 100% 0%, rgba(237, 108, 48, 0.32) 0%, rgba(237, 108, 48, 0) 55%),
-        linear-gradient(135deg, var(--green-100) 0%, var(--grounded) 100%);
+      background: var(--grounded);
       color: var(--strike);
       grid-column: 1 / -1;
-      border-color: var(--green-100);
+      border-color: var(--grounded);
       padding: 24px 26px;
       box-shadow: var(--shadow-lg);
     }
 
     .summary-card.highlight::before {
       height: 3px;
-      background: linear-gradient(90deg, var(--green-60) 0%, var(--energy) 100%);
+      background: var(--energy);
     }
 
     .summary-card.highlight .card-label {
@@ -548,7 +539,7 @@
     .output-row:hover { background: var(--green-5); }
 
     .output-row.is-total {
-      background: linear-gradient(180deg, var(--green-5) 0%, var(--strike) 100%);
+      background: var(--green-5);
       border-bottom: 1px solid var(--grey-20);
     }
 
