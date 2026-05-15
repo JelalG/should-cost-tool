@@ -1354,12 +1354,19 @@
   // Save part to library
   async function handleSave() {
     if (isSaving) return;
+    const existing = state.key && savedParts.find(p => p.key === state.key);
+    if (existing) {
+      const label = (state.partName || state.partNumber || existing.partName || existing.partNumber || 'this part').toString().trim() || 'this part';
+      if (!confirm('You are about to edit an existing part (' + label + '). Overwrite the saved version?')) {
+        return;
+      }
+    }
     isSaving = true;
     try {
       const payload = resolveDefaultsForSave(state);
       setState(payload);
       const key = await runServer('savePart', JSON.stringify(payload));
-      showToast('Part saved');
+      showToast(existing ? 'Part updated' : 'Part saved');
       await loadPartsList();
     } catch (e) {
       showToast('Save failed: ' + e.message, 'error');
