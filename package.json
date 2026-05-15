@@ -1,0 +1,18 @@
+{
+  "name": "should-cost-injection-mold",
+  "version": "1.0.0",
+  "description": "Real-time injection molding should-cost calculator",
+  "main": "Code.gs",
+  "scripts": {
+    "push": "clasp push",
+    "pull": "clasp pull",
+    "logs": "clasp logs",
+    "open": "clasp open"
+  },
+  "keywords": ["injection-mold", "cost-calculator", "should-cost"],
+  "author": "Jelal",
+  "license": "MIT",
+  "devDependencies": {
+    "@google/clasp": "^2.4.2"
+  }
+}

@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Should Cost: Injection Mold</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #f8f8f8;
+      color: #333;
+      line-height: 1.5;
+    }
+
+    #app {
+      display: flex;
+      height: 100vh;
+      gap: 0;
+    }
+
+    #left-panel {
+      flex: 0 0 45%;
+      background: white;
+      overflow-y: auto;
+      border-right: 1px solid #ddd;
+      padding: 20px;
+    }
+
+    #right-panel {
+      flex: 1;
+      background: #f8f8f8;
+      overflow-y: auto;
+      padding: 20px;
+    }
+
+    .section-header {
+      background: #0B3D2E;
+      color: white;
+      padding: 12px 14px;
+      border-radius: 6px;
+      margin-top: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .section-body {
+      background: #f8f8f8;
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+      align-items: flex-start;
+    }
+
+    .input-group {
+      flex: 1;
+    }
+
+    .input-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #0B3D2E;
+      margin-bottom: 4px;
+      display: block;
+    }
+
+    .input-field {
+      width: 100%;
+      padding: 8px 10px;
+      border: 0.5px solid #ccc;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+    }
+
+    .input-field:focus {
+      outline: none;
+      border-color: #38761D;
+      box-shadow: 0 0 0 2px rgba(56, 118, 29, 0.1);
+    }
+
+    .input-field.override {
+      border-color: #BA7517;
+      border-width: 1.5px;
+    }
+
+    .override-badge {
+      display: inline-block;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin-top: 4px;
+      font-weight: 600;
+    }
+
+    .override-badge.default {
+      background: #EAF3DE;
+      color: #27500A;
+    }
+
+    .override-badge.override {
+      background: #FFF8E8;
+      color: #6b4f00;
+    }
+
+    .clear-btn {
+      display: none;
+      padding: 4px 8px;
+      background: #A32D2D;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+
+    .clear-btn:hover {
+      background: #8a2424;
+    }
+
+    button {
+      padding: 8px 12px;
+      background: #38761D;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    button:hover {
+      background: #2d5f18;
+    }
+
+    button.secondary {
+      background: #666;
+    }
+
+    button.secondary:hover {
+      background: #555;
+    }
+
+    button.delete {
+      background: #A32D2D;
+    }
+
+    button.delete:hover {
+      background: #8a2424;
+    }
+
+    .reset-btn {
+      padding: 6px 10px;
+      font-size: 11px;
+      background: #38761D;
+    }
+
+    #summary-cards {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .summary-card {
+      background: white;
+      padding: 16px;
+      border-radius: 8px;
+      border-left: 4px solid #38761D;
+    }
+
+    .summary-card.highlight {
+      border-left-color: #0B3D2E;
+      background: #EAF3DE;
+      grid-column: 1 / -1;
+    }
+
+    .card-label {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+
+    .card-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: #0B3D2E;
+    }
+
+    #output-table {
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #ddd;
+    }
+
+    .output-row {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      border-bottom: 1px solid #eee;
+    }
+
+    .output-row:last-child {
+      border-bottom: none;
+    }
+
+    .output-row:nth-child(odd) {
+      background: #f8f8f8;
+    }
+
+    .output-label {
+      padding: 12px;
+      font-weight: 600;
+      font-size: 12px;
+      background: #f0f0f0;
+      color: #0B3D2E;
+    }
+
+    .output-value {
+      padding: 12px;
+      font-size: 13px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      color: #333;
+    }
+
+    .parts-list {
+      background: #f8f8f8;
+      border-radius: 6px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .part-item {
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .part-item:last-child {
+      border-bottom: none;
+    }
+
+    .part-item input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+
+    .part-item-label {
+      flex: 1;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .part-item-delete {
+      padding: 4px 8px;
+      background: #A32D2D;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+    }
+
+    .part-item-delete:hover {
+      background: #8a2424;
+    }
+
+    .tool-bar-container {
+      margin-top: 8px;
+    }
+
+    .tool-bar {
+      width: 100%;
+      height: 20px;
+      background: #ddd;
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #tool-bar-fill {
+      height: 100%;
+      background: #38761D;
+      transition: width 0.2s, background 0.2s;
+    }
+
+    #tool-bar-label {
+      font-size: 11px;
+      color: #666;
+      margin-top: 4px;
+      display: block;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #0B3D2E;
+      color: white;
+      padding: 12px 16px;
+      border-radius: 6px;
+      font-size: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 1000;
+      animation: slideIn 0.3s ease-out;
+    }
+
+    .toast.error {
+      background: #A32D2D;
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateX(400px);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    select {
+      padding: 8px 10px;
+      border: 0.5px solid #ccc;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+    }
+
+    select:focus {
+      outline: none;
+      border-color: #38761D;
+      box-shadow: 0 0 0 2px rgba(56, 118, 29, 0.1);
+    }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <div id="left-panel">
+    <div id="saved-parts-panel">
+      <div class="section-header">
+        Saved Parts Library
+        <button class="reset-btn" onclick="loadPartsList()">↻ Refresh</button>
+      </div>
+      <div class="section-body">
+        <div id="parts-list" class="parts-list"></div>
+        <div style="margin-top: 12px;">
+          <button onclick="handleNewPart()" style="width: 100%; margin-bottom: 8px;">New Part</button>
+          <button onclick="handleExport()" class="secondary" style="width: 100%; margin-bottom: 8px;">Export Selected</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="part-process-section">
+      <div class="section-header">
+        Part & Process
+        <button class="reset-btn" onclick="resetSection('part')">reset</button>
+      </div>
+      <div class="section-body">
+        <div class="input-row">
+          <div class="input-group">
+            <label class="input-label">Part Number</label>
+            <input class="input-field" type="text" id="partNumber" placeholder="PN-0001">
+          </div>
+          <div class="input-group">
+            <label class="input-label">Part Name</label>
+            <input class="input-field" type="text" id="partName" placeholder="Sample Part">
+          </div>
+        </div>
+        <div class="input-row">
+          <div class="input-group">
+            <label class="input-label">Region</label>
+            <select id="region">
+              <option>USA</option>
+              <option>Mexico</option>
+              <option>China</option>
+              <option>Indonesia</option>
+            </select>
+          </div>
+        </div>
+        <div class="input-row">
+          <div class="input-group">
+            <label class="input-label">Cavities</label>
+            <input class="input-field" type="number" id="cavities" min="1" value="2">
+          </div>
+          <div class="input-group">
+            <label class="input-label">Cycle Time (sec)</label>
+            <input class="input-field" type="number" id="cycleTimeSec" step="0.1" value="28">
+          </div>
+          <div class="input-group">
+            <label class="input-label">Utilization %</label>
+            <input class="input-field" type="number" id="utilization" step="0.01" min="0" max="1" value="0.85">
+          </div>
+        </div>
+        <div class="input-row">
+          <div class="input-group">
+            <label class="input-label">Scrap Rate %</label>
+            <input class="input-field" type="number" id="scrapRate" step="0.01" min="0" max="1" value="0.02">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="resin-section">
+      <div class="section-header">
+        Resin
+        <button class="reset-btn" onclick="resetSection('resin')">reset</button>
+      </div>
+      <div class="section-body">
+        <div class="input-row">
+          <div class="input-group">
+            <label class="input-label">Part Weight (g)</label>
+            <input class="input-field" type="number" id="partWeightG" step="0.1" value="85">
+          </div>
+          <div class="input-group">
+            <label class="input-label">Runner %</label>
+            <input class="input-field" type="number" id="runnerPct" step="0.1" value="14">
+          </div>
+        </div>
+        <div class="input-row">
+          <div class="input-group">
+            <label class="input-label">Runner Override (g)</label>
+            <input class="input-field" type="number" id="runnerWeightOverride" step="0.1" placeholder="Leave blank for auto">
+          </div>
+        </div>
+        <div class="input-row">
+          <div class="input-group">
+            <label class="input-label">Regrind Rate</label>
+            <input class="input-field" type="number" id="regrindRate" step="0.01" min="0" max="1" value="0.30">
+          </div>
+          <div class="input-group">
+            <label class="input-label">Resin Cost ($/kg)</label>
+            <input class="input-field" type="number" id="resinCostPerKg" step="0.01" value="2.98">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="machine-section">
+      <div class="section-header">
+        Machine
+        <button class="reset-btn" onclick="resetSection('machine')">reset</button>
+      </div>
+      <div class="section-body">
+        <div class="input-row">
+          <div class="input-group">
+            <label class="input-label">Tonnage</label>
+            <input class="input-field" type="number" id="tonnage" step="1" value="250">
+          </div>
+        </div>
+        <div class="input-row">
+          <div class="input-group">
+            <label class="input-label">Machine Rate Override ($/hr)</label>
+            <input class="input-field" type="number" id="machineRateOverride" step="0.1" placeholder="Leave blank for auto">
+          </div>
+        </div>
+        <div id="machine-rate-badge" class="override-badge default">default: auto-resolved</div>
+      </div>
+    </div>
+
+    <div id="labor-section">
+      <div class="section-header">
+        Labor & Overhead
+        <button class="reset-btn" onclick="resetSection('labor')">reset</button>
+      </div>
+      <div class="section-body">
+        <div class="input-row">
+          <div class="input-group">
+            <label class="input-label">Labor Rate Override ($/hr)</label>
+            <input class="input-field" type="number" id="laborRateOverride" step="0.01" placeholder="Leave blank for regional default">
+          </div>
+        </div>
+        <div id="labor-rate-badge" class="override-badge default">default: regional rate</div>
+        <div class="input-row" style="margin-top: 12px;">
+          <div class="input-group">
+            <label class="input-label">OH Rate Override %</label>
+            <input class="input-field" type="number" id="ohRateOverride" step="0.1" placeholder="Leave blank for regional default">
+          </div>
+        </div>
+        <div id="oh-rate-badge" class="override-badge default">default: regional rate</div>
+      </div>
+    </div>
+
+    <div id="margin-section">
+      <div class="section-header">
+        Margin
+        <button class="reset-btn" onclick="resetSection('margin')">reset</button>
+      </div>
+      <div class="section-body">
+        <div class="input-row">
+          <div class="input-group">
+            <label class="input-label">Margin Rate Override %</label>
+            <input class="input-field" type="number" id="marginRateOverride" step="0.1" placeholder="Leave blank for regional default">
+          </div>
+        </div>
+        <div id="margin-rate-badge" class="override-badge default">default: regional margin</div>
+      </div>
+    </div>
+
+    <div id="tooling-section">
+      <div class="section-header">
+        Tooling
+        <button class="reset-btn" onclick="resetSection('tooling')">reset</button>
+      </div>
+      <div class="section-body">
+        <div class="input-row">
+          <div class="input-group">
+            <label class="input-label">Tooling Cost ($)</label>
+            <input class="input-field" type="number" id="toolingCost" step="1" value="85000">
+          </div>
+          <div class="input-group">
+            <label class="input-label">Tool Life (shots)</label>
+            <input class="input-field" type="number" id="toolLife" step="1" value="750000">
+          </div>
+        </div>
+        <div class="input-row">
+          <div class="input-group">
+            <label class="input-label">Cumulative Volume</label>
+            <input class="input-field" type="number" id="cumulativeVolume" step="1" min="0" value="0">
+          </div>
+        </div>
+        <div class="tool-bar-container">
+          <div class="tool-bar">
+            <div id="tool-bar-fill" style="width: 0%;"></div>
+          </div>
+          <span id="tool-bar-label"></span>
+        </div>
+      </div>
+    </div>
+
+    <button onclick="handleSave()" style="width: 100%; margin-top: 20px; padding: 12px; font-size: 14px;">Save Part to Library</button>
+  </div>
+
+  <div id="right-panel">
+    <h2 style="color: #0B3D2E; margin-bottom: 16px;">Cost Breakdown</h2>
+
+    <div id="summary-cards">
+      <div class="summary-card highlight">
+        <div class="card-label">TOTAL SHOULD COST (incl. Tooling)</div>
+        <div class="card-value">$<span id="total-with-tooling">0.0000</span>/pc</div>
+      </div>
+      <div class="summary-card">
+        <div class="card-label">Base (ex-tooling)</div>
+        <div class="card-value">$<span id="base-total">0.0000</span>/pc</div>
+      </div>
+      <div class="summary-card">
+        <div class="card-label">Tooling Amort.</div>
+        <div class="card-value">$<span id="tool-amort">0.0000</span>/pc</div>
+      </div>
+      <div class="summary-card">
+        <div class="card-label">Resin Cost</div>
+        <div class="card-value">$<span id="resin-cost">0.0000</span>/pc</div>
+      </div>
+      <div class="summary-card">
+        <div class="card-label">Processing</div>
+        <div class="card-value">$<span id="processing-cost">0.0000</span>/pc</div>
+      </div>
+      <div class="summary-card">
+        <div class="card-label">Profit (CM)</div>
+        <div class="card-value">$<span id="profit">0.0000</span>/pc</div>
+      </div>
+    </div>
+
+    <h3 style="color: #0B3D2E; margin: 20px 0 12px;">Detailed Output</h3>
+
+    <div id="output-table">
+      <div class="output-row">
+        <div class="output-label">Total (with tooling)</div>
+        <div class="output-value">$<span id="out-total-with-tooling">0.0000</span></div>
+      </div>
+      <div class="output-row">
+        <div class="output-label">Base (ex-tooling)</div>
+        <div class="output-value">$<span id="out-base-total">0.0000</span></div>
+      </div>
+      <div class="output-row">
+        <div class="output-label">Tooling amortization</div>
+        <div class="output-value">$<span id="out-tool-amort">0.0000</span></div>
+      </div>
+      <div class="output-row">
+        <div class="output-label">Resin cost</div>
+        <div class="output-value">$<span id="out-resin">0.0000</span></div>
+      </div>
+      <div class="output-row">
+        <div class="output-label">Processing cost</div>
+        <div class="output-value">$<span id="out-processing">0.0000</span></div>
+      </div>
+      <div class="output-row">
+        <div class="output-label">Scrap cost</div>
+        <div class="output-value">$<span id="out-scrap">0.0000</span></div>
+      </div>
+      <div class="output-row">
+        <div class="output-label">Overhead cost</div>
+        <div class="output-value">$<span id="out-overhead">0.0000</span></div>
+      </div>
+      <div class="output-row">
+        <div class="output-label">Profit</div>
+        <div class="output-value">$<span id="out-profit">0.0000</span></div>
+      </div>
+      <div class="output-row">
+        <div class="output-label">Region</div>
+        <div class="output-value"><span id="out-region">Mexico</span></div>
+      </div>
+      <div class="output-row">
+        <div class="output-label">Machine Rate ($/hr)</div>
+        <div class="output-value">$<span id="out-machine-rate">0.00</span></div>
+      </div>
+      <div class="output-row">
+        <div class="output-label">Cavities</div>
+        <div class="output-value"><span id="out-cavities">2</span></div>
+      </div>
+      <div class="output-row">
+        <div class="output-label">Cycle Time (sec)</div>
+        <div class="output-value"><span id="out-cycle-time">28</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Global state
+  let state = { ...DEFAULTS };
+  let savedParts = [];
+  let selectedPartKeys = new Set();
+  let isSaving = false;
+
+  // Initialize DEFAULTS copy (from Data.gs)
+  const DEFAULTS = {
+    partNumber: 'PN-0001',
+    partName: 'Sample Part',
+    region: 'Mexico',
+    partWeightG: 85,
+    runnerPct: 14,
+    runnerWeightOverride: null,
+    regrindRate: 0.30,
+    cavities: 2,
+    cycleTimeSec: 28,
+    utilization: 0.85,
+    scrapRate: 0.02,
+    resinCostPerKg: 2.98,
+    tonnage: 250,
+    machineRateOverride: null,
+    laborRateOverride: null,
+    ohRateOverride: null,
+    marginRateOverride: null,
+    toolingCost: 85000,
+    toolLife: 750000,
+    cumulativeVolume: 0
+  };
+
+  // Helper to run server functions
+  function runServer(fn, ...args) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        [fn](...args);
+    });
+  }
+
+  // Update state and recalculate
+  function setState(patch) {
+    state = { ...state, ...patch };
+    recalculate();
+    renderOutputs();
+    updateToolBar();
+    updateBadges();
+  }
+
+  // Add event listeners for all inputs
+  function attachInputListeners() {
+    const inputs = ['partNumber', 'partName', 'region', 'partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'machineRateOverride', 'laborRateOverride', 'ohRateOverride', 'marginRateOverride', 'toolingCost', 'toolLife', 'cumulativeVolume'];
+
+    inputs.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('input', (e) => {
+          const val = e.target.type === 'number' || e.target.type === 'range'
+            ? (e.target.value === '' ? null : parseFloat(e.target.value))
+            : e.target.value;
+          setState({ [id]: val });
+        });
+      }
+    });
+  }
+
+  // Client-side cost calculation (mirrors Calc.gs)
+  function calcSC(inp) {
+    const REGIONS = {
+      USA: { laborRate: 28.50, secMachineRate: 10.0, secOpsMin: 0.25, ohRate: 0.90, sgaRate: 0.07, marginRate: 0.10, pkg: 0.08, freight: 0.04, duty: 0.00, multiplier: 1.00 },
+      Mexico: { laborRate: 5.80, secMachineRate: 6.5, secOpsMin: 0.30, ohRate: 0.60, sgaRate: 0.06, marginRate: 0.09, pkg: 0.07, freight: 0.08, duty: 0.00, multiplier: 0.615 },
+      China: { laborRate: 7.20, secMachineRate: 5.5, secOpsMin: 0.35, ohRate: 0.65, sgaRate: 0.07, marginRate: 0.08, pkg: 0.06, freight: 0.18, duty: 0.25, multiplier: 0.538 },
+      Indonesia: { laborRate: 2.80, secMachineRate: 4.0, secOpsMin: 0.45, ohRate: 0.45, sgaRate: 0.05, marginRate: 0.08, pkg: 0.06, freight: 0.22, duty: 0.10, multiplier: 0.364 }
+    };
+
+    const TONNAGE_BRACKETS = [
+      { maxTons: 50, baseUSA: 32 }, { maxTons: 100, baseUSA: 42 }, { maxTons: 200, baseUSA: 52 },
+      { maxTons: 400, baseUSA: 68 }, { maxTons: 700, baseUSA: 88 }, { maxTons: 1000, baseUSA: 110 },
+      { maxTons: 9999, baseUSA: 140 }
+    ];
+
+    const r = REGIONS[inp.region] || REGIONS.Mexico;
+    const bracket = TONNAGE_BRACKETS.find(b => inp.tonnage <= b.maxTons) || TONNAGE_BRACKETS[TONNAGE_BRACKETS.length - 1];
+    const results = {};
+
+    const machineRate = inp.machineRateOverride !== null && inp.machineRateOverride !== undefined ? inp.machineRateOverride : (bracket.baseUSA * r.multiplier);
+    results._machineRate = machineRate;
+
+    const runnerWeightG = inp.runnerWeightOverride !== null && inp.runnerWeightOverride !== undefined ? inp.runnerWeightOverride : (inp.partWeightG * inp.runnerPct / 100);
+    const grossG = inp.partWeightG + (runnerWeightG * (1 - inp.regrindRate));
+    const grossKg = grossG / 1000;
+    const resinPP = grossKg * inp.resinCostPerKg;
+    const matScrap = resinPP * inp.scrapRate;
+    const matTotal = resinPP + matScrap;
+    results.resinCostPerPart = resinPP;
+
+    const partsPerHr = (3600 / inp.cycleTimeSec) * inp.utilization * inp.cavities;
+    const machPP = machineRate / partsPerHr;
+    const machScrap = machPP * inp.scrapRate;
+    const machTotal = machPP + machScrap;
+
+    const laborRate = inp.laborRateOverride !== null && inp.laborRateOverride !== undefined ? inp.laborRateOverride : r.laborRate;
+    const directLP = laborRate / partsPerHr;
+    const secLP = laborRate * (r.secOpsMin / 60);
+    const laborScrap = (directLP + secLP) * inp.scrapRate;
+    const laborTotal = directLP + secLP + laborScrap;
+
+    const secMachPP = r.secMachineRate * (r.secOpsMin / 60);
+    const ohRate = inp.ohRateOverride !== null && inp.ohRateOverride !== undefined ? (inp.ohRateOverride / 100) : r.ohRate;
+    const ohTotal = (directLP + secLP) * ohRate;
+    const pkgFreight = r.pkg + r.freight;
+    const mfgSubBase = matTotal + machTotal + laborTotal + secMachPP + ohTotal + pkgFreight;
+    const duty = mfgSubBase * r.duty;
+    const sga = mfgSubBase * r.sgaRate;
+    results.processingCostPerPart = machPP + directLP + secLP + secMachPP;
+    results.scrapCostPerPart = matScrap + machScrap + laborScrap;
+    results.overheadCostPerPart = ohTotal;
+
+    const marginRate = inp.marginRateOverride !== null && inp.marginRateOverride !== undefined ? (inp.marginRateOverride / 100) : r.marginRate;
+    const totalBeforeMargin = mfgSubBase + duty + sga;
+    const profit = totalBeforeMargin * marginRate;
+    const baseTotal = totalBeforeMargin + profit;
+    results.profit = profit;
+    results._baseTotal = baseTotal;
+
+    const toolLifeParts = inp.toolLife * inp.cavities;
+    const toolPaidOff = inp.cumulativeVolume >= toolLifeParts;
+    const toolAmortRaw = toolPaidOff ? 0 : inp.toolingCost / toolLifeParts;
+    const toolScrap = toolAmortRaw * inp.scrapRate;
+    const toolAmortPP = toolAmortRaw + toolScrap;
+    results._toolAmortPP = toolAmortPP;
+    results._totalWithTooling = baseTotal + toolAmortPP;
+    results._toolPaidOff = toolPaidOff;
+    results._toolLifeParts = toolLifeParts;
+    results._toolPctUsed = Math.min((inp.cumulativeVolume / toolLifeParts) * 100, 100);
+
+    return results;
+  }
+
+  // Recalculate outputs
+  function recalculate() {
+    // Update input fields from state
+    Object.keys(state).forEach(key => {
+      const el = document.getElementById(key);
+      if (el && key !== 'key') {
+        el.value = state[key] !== null && state[key] !== undefined ? state[key] : '';
+      }
+    });
+  }
+
+  // Render output cards and table
+  function renderOutputs() {
+    const result = calcSC(state);
+
+    document.getElementById('total-with-tooling').textContent = result._totalWithTooling.toFixed(4);
+    document.getElementById('base-total').textContent = result._baseTotal.toFixed(4);
+    document.getElementById('tool-amort').textContent = result._toolAmortPP.toFixed(4);
+    document.getElementById('resin-cost').textContent = result.resinCostPerPart.toFixed(4);
+    document.getElementById('processing-cost').textContent = result.processingCostPerPart.toFixed(4);
+    document.getElementById('profit').textContent = result.profit.toFixed(4);
+
+    document.getElementById('out-total-with-tooling').textContent = result._totalWithTooling.toFixed(4);
+    document.getElementById('out-base-total').textContent = result._baseTotal.toFixed(4);
+    document.getElementById('out-tool-amort').textContent = result._toolAmortPP.toFixed(4);
+    document.getElementById('out-resin').textContent = result.resinCostPerPart.toFixed(4);
+    document.getElementById('out-processing').textContent = result.processingCostPerPart.toFixed(4);
+    document.getElementById('out-scrap').textContent = result.scrapCostPerPart.toFixed(4);
+    document.getElementById('out-overhead').textContent = result.overheadCostPerPart.toFixed(4);
+    document.getElementById('out-profit').textContent = result.profit.toFixed(4);
+    document.getElementById('out-region').textContent = state.region;
+    document.getElementById('out-machine-rate').textContent = result._machineRate.toFixed(2);
+    document.getElementById('out-cavities').textContent = state.cavities;
+    document.getElementById('out-cycle-time').textContent = state.cycleTimeSec;
+  }
+
+  // Update tooling progress bar
+  function updateToolBar() {
+    const result = calcSC(state);
+    const fill = document.getElementById('tool-bar-fill');
+    const label = document.getElementById('tool-bar-label');
+
+    fill.style.width = result._toolPctUsed + '%';
+    fill.style.background = result._toolPaidOff ? '#A32D2D' : (result._toolPctUsed > 75 ? '#BA7517' : '#38761D');
+    label.textContent = result._toolPaidOff ? 'Tool fully amortized — tooling cost = $0/pc' : ((result._toolLifeParts - state.cumulativeVolume).toLocaleString()) + ' parts remaining on tool';
+  }
+
+  // Update override badges
+  function updateBadges() {
+    const REGIONS = {
+      USA: { laborRate: 28.50, ohRate: 0.90, marginRate: 0.10 },
+      Mexico: { laborRate: 5.80, ohRate: 0.60, marginRate: 0.09 },
+      China: { laborRate: 7.20, ohRate: 0.65, marginRate: 0.08 },
+      Indonesia: { laborRate: 2.80, ohRate: 0.45, marginRate: 0.08 }
+    };
+    const r = REGIONS[state.region] || REGIONS.Mexico;
+
+    // Machine rate badge
+    const machOverride = state.machineRateOverride !== null && state.machineRateOverride !== undefined;
+    document.getElementById('machine-rate-badge').className = 'override-badge ' + (machOverride ? 'override' : 'default');
+    document.getElementById('machine-rate-badge').textContent = (machOverride ? 'override: $' : 'default: ') + (machOverride ? state.machineRateOverride.toFixed(2) : 'auto-resolved') + (machOverride ? '/hr' : '');
+
+    // Labor rate badge
+    const laborOverride = state.laborRateOverride !== null && state.laborRateOverride !== undefined;
+    document.getElementById('labor-rate-badge').className = 'override-badge ' + (laborOverride ? 'override' : 'default');
+    document.getElementById('labor-rate-badge').textContent = (laborOverride ? 'override: $' : 'default: $') + (laborOverride ? state.laborRateOverride.toFixed(2) : r.laborRate.toFixed(2)) + '/hr';
+
+    // OH rate badge
+    const ohOverride = state.ohRateOverride !== null && state.ohRateOverride !== undefined;
+    document.getElementById('oh-rate-badge').className = 'override-badge ' + (ohOverride ? 'override' : 'default');
+    document.getElementById('oh-rate-badge').textContent = (ohOverride ? 'override: ' : 'default: ') + (ohOverride ? state.ohRateOverride.toFixed(1) : (r.ohRate * 100).toFixed(1)) + '%';
+
+    // Margin rate badge
+    const marginOverride = state.marginRateOverride !== null && state.marginRateOverride !== undefined;
+    document.getElementById('margin-rate-badge').className = 'override-badge ' + (marginOverride ? 'override' : 'default');
+    document.getElementById('margin-rate-badge').textContent = (marginOverride ? 'override: ' : 'default: ') + (marginOverride ? state.marginRateOverride.toFixed(1) : (r.marginRate * 100).toFixed(1)) + '%';
+
+    // Update override input styles
+    document.getElementById('machineRateOverride').className = state.machineRateOverride ? 'input-field override' : 'input-field';
+    document.getElementById('laborRateOverride').className = state.laborRateOverride ? 'input-field override' : 'input-field';
+    document.getElementById('ohRateOverride').className = state.ohRateOverride ? 'input-field override' : 'input-field';
+    document.getElementById('marginRateOverride').className = state.marginRateOverride ? 'input-field override' : 'input-field';
+  }
+
+  // Reset section to defaults
+  function resetSection(section) {
+    const resetMap = {
+      part: ['partNumber', 'partName', 'region', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate'],
+      resin: ['partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'resinCostPerKg'],
+      machine: ['tonnage', 'machineRateOverride'],
+      labor: ['laborRateOverride', 'ohRateOverride'],
+      margin: ['marginRateOverride'],
+      tooling: ['toolingCost', 'toolLife', 'cumulativeVolume']
+    };
+    const keys = resetMap[section] || [];
+    const patch = {};
+    keys.forEach(key => {
+      patch[key] = DEFAULTS[key];
+    });
+    setState(patch);
+  }
+
+  // Save part to library
+  async function handleSave() {
+    if (isSaving) return;
+    isSaving = true;
+    try {
+      const key = await runServer('savePart', JSON.stringify(state));
+      showToast('Part saved!');
+      await loadPartsList();
+    } catch (e) {
+      showToast('Save failed: ' + e.message, 'error');
+    } finally {
+      isSaving = false;
+    }
+  }
+
+  // Load parts list
+  async function loadPartsList() {
+    try {
+      const json = await runServer('loadAllParts');
+      savedParts = JSON.parse(json);
+      renderPartsList();
+    } catch (e) {
+      console.error('Load failed:', e);
+    }
+  }
+
+  // Render parts list
+  function renderPartsList() {
+    const container = document.getElementById('parts-list');
+    container.innerHTML = savedParts.map(part => `
+      <div class="part-item">
+        <input type="checkbox" onchange="togglePartSelection('${part.key}', this.checked)">
+        <label class="part-item-label" onclick="loadPart('${part.key}')" style="cursor: pointer;">
+          ${part.partNumber || 'N/A'} - ${part.partName || 'Unnamed'}
+        </label>
+        <button class="part-item-delete" onclick="handleDeletePart('${part.key}')">Delete</button>
+      </div>
+    `).join('');
+  }
+
+  // Load part into editor
+  function loadPart(key) {
+    const part = savedParts.find(p => p.key === key);
+    if (part) {
+      state = { ...part };
+      recalculate();
+      renderOutputs();
+      updateToolBar();
+      updateBadges();
+    }
+  }
+
+  // Toggle part selection for export
+  function togglePartSelection(key, checked) {
+    if (checked) {
+      selectedPartKeys.add(key);
+    } else {
+      selectedPartKeys.delete(key);
+    }
+  }
+
+  // Delete part
+  async function handleDeletePart(key) {
+    if (confirm('Delete this part?')) {
+      try {
+        await runServer('deletePart', key);
+        await loadPartsList();
+        showToast('Part deleted');
+      } catch (e) {
+        showToast('Delete failed: ' + e.message, 'error');
+      }
+    }
+  }
+
+  // Export selected parts
+  async function handleExport() {
+    if (selectedPartKeys.size === 0) {
+      showToast('Select parts to export', 'error');
+      return;
+    }
+    const selected = savedParts.filter(p => selectedPartKeys.has(p.key));
+    try {
+      const url = await runServer('exportPartsToSheet', JSON.stringify(selected));
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.click();
+      showToast('Export complete! Opening Sheet...');
+    } catch (e) {
+      showToast('Export failed: ' + e.message, 'error');
+    }
+  }
+
+  // New part
+  function handleNewPart() {
+    state = { ...DEFAULTS };
+    selectedPartKeys.clear();
+    recalculate();
+    renderOutputs();
+    updateToolBar();
+    updateBadges();
+    showToast('New part');
+  }
+
+  // Show toast notification
+  function showToast(msg, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = 'toast' + (type === 'error' ? ' error' : '');
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+  }
+
+  // Initialize on load
+  window.addEventListener('DOMContentLoaded', async () => {
+    attachInputListeners();
+    await loadPartsList();
+    recalculate();
+    renderOutputs();
+    updateToolBar();
+    updateBadges();
+  });
+</script>
+
+</body>
+</html>
