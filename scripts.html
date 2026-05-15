@@ -24,18 +24,74 @@
     cumulativeVolume: null,
     wallThicknessMm: null,
     annualVolume: null,
-    autoEstimate: false
+    autoEstimate: false,
+    resinBlend: null  // { resins: [{resinId, weightPct}], filler: {type, pct}, kOverride, savedBlendKey, name }
   };
 
   // Auto-estimate constants — see methodology block #m-auto for derivations.
   const AUTO_TARGET_HOURS = 4000;       // production hours/yr per tool
   const AUTO_UTILIZATION  = 0.85;       // industry-standard utilization default
-  const AUTO_COOLING_K    = 2.5;        // cooling-time coefficient (s/mm²) for typical commodity resins
+  const AUTO_COOLING_K    = 2.5;        // fallback cooling coefficient (s/mm²) when no resin/blend selected
   const AUTO_OVERHEAD_S   = 5;          // fill + eject overhead (s)
   const AUTO_CLAMP_T_PER_G = 1.0;       // rough rule of thumb: 1 ton per gram of shot weight
   const CAVITY_STEPS = [1, 2, 4, 6, 8, 12, 16, 24, 32, 48, 64];
   const TONNAGE_STEPS = [50, 100, 200, 400, 700, 1000, 1500];
   const AUTO_FIELDS = ['cavities', 'cycleTimeSec', 'utilization', 'tonnage'];
+
+  // Cooling coefficients k (s/mm²) for common base resins. Cycle time ≈ overhead + k × wall².
+  // Sourced from molding handbooks (Rosato, Osswald) and field practice — typical, not authoritative.
+  const BASE_RESINS = {
+    ABS:    { k: 2.5, name: 'ABS' },
+    PP:     { k: 2.0, name: 'PP' },
+    PE_HD:  { k: 2.2, name: 'PE (HDPE)' },
+    PS:     { k: 2.3, name: 'PS' },
+    PC:     { k: 3.2, name: 'PC' },
+    PA6:    { k: 2.7, name: 'PA6 (Nylon 6)' },
+    PA66:   { k: 2.6, name: 'PA66 (Nylon 66)' },
+    POM:    { k: 3.0, name: 'POM (Acetal)' },
+    PET:    { k: 2.8, name: 'PET' },
+    PMMA:   { k: 3.5, name: 'PMMA (Acrylic)' },
+    PBT:    { k: 2.6, name: 'PBT' },
+    TPU:    { k: 2.6, name: 'TPU' },
+    TPE:    { k: 2.4, name: 'TPE' }
+  };
+
+  // Filler increments k (slower cooling through the gel layer). Bump is added per 10% loading.
+  const FILLER_BUMPS = {
+    none:    { bumpPer10Pct: 0.00, name: 'None' },
+    glass:   { bumpPer10Pct: 0.15, name: 'Glass fiber' },
+    talc:    { bumpPer10Pct: 0.10, name: 'Talc' },
+    mineral: { bumpPer10Pct: 0.10, name: 'Mineral' },
+    caco3:   { bumpPer10Pct: 0.08, name: 'CaCO₃' }
+  };
+
+  // Derive the blend's cooling coefficient. Linear weight-fraction mix of base k values
+  // plus a filler-type bump. Returns null when composition is incomplete.
+  function computeKBlend(comp) {
+    if (!comp) return null;
+    if (comp.kOverride !== null && comp.kOverride !== undefined && comp.kOverride > 0) {
+      return +comp.kOverride;
+    }
+    const resins = (comp.resins || []).filter(r => r && r.resinId && BASE_RESINS[r.resinId] && r.weightPct > 0);
+    if (resins.length === 0) return null;
+    const total = resins.reduce((s, r) => s + r.weightPct, 0);
+    if (total <= 0) return null;
+    const kResin = resins.reduce((s, r) => s + BASE_RESINS[r.resinId].k * r.weightPct, 0) / total;
+    const f = comp.filler;
+    const fillerBump = (f && f.type && f.type !== 'none' && f.pct > 0)
+      ? (f.pct / 10) * (FILLER_BUMPS[f.type] || { bumpPer10Pct: 0 }).bumpPer10Pct
+      : 0;
+    return +(kResin + fillerBump).toFixed(2);
+  }
+
+  // True iff the resins (ignoring filler) sum to 100 ± 0.5. Used only to surface a soft warning.
+  function blendIsNormalized(comp) {
+    if (!comp) return true;
+    const resins = (comp.resins || []).filter(r => r && r.resinId && r.weightPct > 0);
+    if (resins.length === 0) return true;
+    const total = resins.reduce((s, r) => s + r.weightPct, 0);
+    return Math.abs(total - 100) < 0.5;
+  }
 
   // Derive cavities, cycle time, utilization, and tonnage from wall thickness +
   // annual volume + part weight + runner %. Returns null when prerequisites
@@ -46,7 +102,9 @@
     if (!(wall > 0) || !(annual > 0)) return null;
 
     const utilization = AUTO_UTILIZATION;
-    const cycleTimeSec = +(AUTO_OVERHEAD_S + AUTO_COOLING_K * wall * wall).toFixed(1);
+    const k = computeKBlend(s.resinBlend);
+    const kEff = (k !== null && k > 0) ? k : AUTO_COOLING_K;
+    const cycleTimeSec = +(AUTO_OVERHEAD_S + kEff * wall * wall).toFixed(1);
 
     const partsPerHrPerCav = (3600 / cycleTimeSec) * utilization;
     const cavRaw = annual / (partsPerHrPerCav * AUTO_TARGET_HOURS);
@@ -66,8 +124,71 @@
   // Global state
   let state = { ...DEFAULTS };
   let savedParts = [];
+  let savedBlends = [];
   let selectedPartKeys = new Set();
   let isSaving = false;
+  let isSavingBlend = false;
+
+  const MAX_BLEND_RESINS = 4;
+  const BLEND_DEFAULT_FILLER = { type: 'none', pct: 0 };
+
+  // Make a single-resin blend (used when the user picks a base resin from the family dropdown).
+  function makeSingleResinBlend(resinId) {
+    return {
+      resins: [{ resinId, weightPct: 100 }],
+      filler: { ...BLEND_DEFAULT_FILLER },
+      kOverride: null,
+      savedBlendKey: null,
+      name: null
+    };
+  }
+
+  function emptyBlend() {
+    return {
+      resins: [{ resinId: '', weightPct: 100 }],
+      filler: { ...BLEND_DEFAULT_FILLER },
+      kOverride: null,
+      savedBlendKey: null,
+      name: null
+    };
+  }
+
+  function cloneBlend(b) {
+    if (!b) return null;
+    return {
+      resins: (b.resins || []).map(r => ({ resinId: r.resinId, weightPct: +r.weightPct })),
+      filler: { type: (b.filler && b.filler.type) || 'none', pct: +((b.filler && b.filler.pct) || 0) },
+      kOverride: (b.kOverride !== null && b.kOverride !== undefined && b.kOverride !== '') ? +b.kOverride : null,
+      savedBlendKey: b.savedBlendKey || null,
+      name: b.name || null
+    };
+  }
+
+  // Resolve a "resinFamily" dropdown value into a blend object (or null when the user picks none).
+  function blendFromFamilyValue(value) {
+    if (!value) return null;
+    if (value === '__custom__') return emptyBlend();
+    if (value.startsWith('saved:')) {
+      const key = value.slice(6);
+      const saved = savedBlends.find(b => b.key === key);
+      return saved ? { ...cloneBlend(saved), savedBlendKey: saved.key, name: saved.name } : emptyBlend();
+    }
+    if (BASE_RESINS[value]) return makeSingleResinBlend(value);
+    return null;
+  }
+
+  // The inverse: derive a dropdown value from a blend object so the select stays in sync.
+  function familyValueFromBlend(b) {
+    if (!b) return '';
+    if (b.savedBlendKey) return 'saved:' + b.savedBlendKey;
+    const resins = (b.resins || []).filter(r => r && r.resinId && r.weightPct > 0);
+    const fillerNone = !b.filler || b.filler.type === 'none' || !(b.filler.pct > 0);
+    const noOverride = b.kOverride === null || b.kOverride === undefined;
+    if (resins.length === 1 && resins[0].weightPct === 100 && fillerNone && noOverride) {
+      return resins[0].resinId;
+    }
+    return '__custom__';
+  }
 
   // Helper to run server functions
   function runServer(fn, ...args) {
@@ -91,9 +212,20 @@
     state = next;
     recalculate();
     renderOutputs();
+    renderBlendBuilder();
     updateToolBar();
     updateBadges();
     updateAutoLockUI();
+  }
+
+  // Mutate state.resinBlend through a callback, then push back through setState.
+  function patchBlend(mutator) {
+    const next = cloneBlend(state.resinBlend) || emptyBlend();
+    // User-driven edits to composition decouple from any saved-blend identity.
+    next.savedBlendKey = null;
+    next.name = null;
+    mutator(next);
+    setState({ resinBlend: next });
   }
 
   // Visually lock the four auto-derived inputs when autoEstimate is on, and
@@ -109,6 +241,219 @@
     document.querySelectorAll('.auto-badge').forEach(b => { b.hidden = !locked; });
     const cb = document.getElementById('autoEstimate');
     if (cb) cb.checked = locked;
+  }
+
+  // Populate the resin-family dropdown's two optgroups (base resins + saved blends).
+  // Called once at init and whenever the saved-blends list changes.
+  function populateResinFamilyOptions() {
+    const sel = document.getElementById('resinFamily');
+    if (!sel) return;
+    const singleGroup = document.getElementById('single-resin-optgroup');
+    const savedGroup = document.getElementById('saved-blends-optgroup');
+    singleGroup.replaceChildren();
+    savedGroup.replaceChildren();
+    Object.keys(BASE_RESINS).forEach(id => {
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = BASE_RESINS[id].name;
+      singleGroup.appendChild(opt);
+    });
+    if (savedBlends.length === 0) {
+      savedGroup.style.display = 'none';
+    } else {
+      savedGroup.style.display = '';
+      savedBlends.forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = 'saved:' + b.key;
+        opt.textContent = b.name + ' (k=' + (computeKBlend(b) || '?') + ')';
+        savedGroup.appendChild(opt);
+      });
+    }
+  }
+
+  // Render the blend builder. Driven entirely by state.resinBlend.
+  // Rebuilds the row DOM only when the structure changed (count or resin ids) —
+  // value-only edits leave the row inputs alone so they don't lose focus mid-keystroke.
+  function renderBlendBuilder() {
+    const sel = document.getElementById('resinFamily');
+    const panel = document.getElementById('blend-composition');
+    if (!sel || !panel) return;
+
+    const blend = state.resinBlend;
+    sel.value = familyValueFromBlend(blend);
+
+    if (!blend) {
+      panel.hidden = true;
+      return;
+    }
+    panel.hidden = false;
+
+    const rowsEl = document.getElementById('blend-resin-rows');
+    const resins = blend.resins || [];
+    const signature = resins.map(r => r.resinId || '_').join('|') + '#' + resins.length;
+    if (rowsEl.dataset.sig !== signature) {
+      rowsEl.replaceChildren();
+      resins.forEach((r, idx) => rowsEl.appendChild(buildResinRow(r, idx, resins.length)));
+      rowsEl.dataset.sig = signature;
+    } else {
+      // Same structure — just sync values into the existing inputs so they
+      // don't fight the user's in-progress typing.
+      Array.from(rowsEl.children).forEach((row, idx) => {
+        const pctInput = row.querySelector('.blend-pct-input');
+        if (pctInput && pctInput !== document.activeElement) {
+          pctInput.value = resins[idx].weightPct;
+        }
+      });
+    }
+
+    const addBtn = document.getElementById('add-resin-btn');
+    addBtn.disabled = resins.length >= MAX_BLEND_RESINS;
+
+    const sum = resins.reduce((s, r) => s + (+r.weightPct || 0), 0);
+    const sumLabel = document.getElementById('blend-sum-label');
+    sumLabel.textContent = 'Σ = ' + sum.toFixed(0) + '%';
+    sumLabel.className = 'blend-sum-label ' + (Math.abs(sum - 100) < 0.5 ? 'ok' : 'warn');
+
+    document.getElementById('fillerType').value = (blend.filler && blend.filler.type) || 'none';
+    const fillerPctEl = document.getElementById('fillerPct');
+    if (document.activeElement !== fillerPctEl) {
+      fillerPctEl.value = (blend.filler && blend.filler.pct > 0) ? blend.filler.pct : '';
+    }
+
+    const kOverrideEl = document.getElementById('kOverride');
+    if (document.activeElement !== kOverrideEl) {
+      kOverrideEl.value = (blend.kOverride !== null && blend.kOverride !== undefined) ? blend.kOverride : '';
+    }
+    // Auto-open the advanced disclosure when an override is set so it's visible.
+    const adv = kOverrideEl.closest('details');
+    if (adv && blend.kOverride !== null && blend.kOverride !== undefined && !adv.open) adv.open = true;
+
+    const k = computeKBlend(blend);
+    const kEl = document.getElementById('derived-k');
+    kEl.textContent = (k !== null && k > 0) ? (k.toFixed(2) + ' s/mm²') : '— s/mm²';
+
+    const warn = document.getElementById('blend-warning');
+    if (!blendIsNormalized(blend)) {
+      warn.hidden = false;
+      warn.textContent = 'Weights don’t sum to 100% — normalized internally.';
+    } else if (blend.kOverride !== null && blend.kOverride !== undefined && blend.kOverride > 0) {
+      warn.hidden = false;
+      warn.textContent = 'Using override k — blend math bypassed.';
+    } else {
+      warn.hidden = true;
+    }
+
+    const saveBtn = document.getElementById('save-blend-btn');
+    const deleteBtn = document.getElementById('delete-blend-btn');
+    saveBtn.disabled = !(k !== null && k > 0);
+    if (blend.savedBlendKey) {
+      saveBtn.textContent = 'Update saved blend';
+      deleteBtn.hidden = false;
+    } else {
+      saveBtn.textContent = 'Save as named blend…';
+      deleteBtn.hidden = true;
+    }
+  }
+
+  function buildResinRow(r, idx, total) {
+    const row = document.createElement('div');
+    row.className = 'blend-resin-row';
+
+    const sel = document.createElement('select');
+    sel.setAttribute('aria-label', 'Resin ' + (idx + 1));
+    const blank = document.createElement('option');
+    blank.value = '';
+    blank.textContent = '— select resin —';
+    sel.appendChild(blank);
+    Object.keys(BASE_RESINS).forEach(id => {
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = BASE_RESINS[id].name + ' (k=' + BASE_RESINS[id].k + ')';
+      sel.appendChild(opt);
+    });
+    sel.value = r.resinId || '';
+    sel.addEventListener('change', () => {
+      patchBlend(b => { b.resins[idx].resinId = sel.value; });
+    });
+
+    const pct = document.createElement('input');
+    pct.type = 'number';
+    pct.min = '0';
+    pct.max = '100';
+    pct.step = 'any';
+    pct.inputMode = 'decimal';
+    pct.className = 'blend-pct-input';
+    pct.setAttribute('aria-label', 'Weight % for resin ' + (idx + 1));
+    pct.value = r.weightPct;
+    pct.addEventListener('input', () => {
+      const v = pct.value === '' ? 0 : parseFloat(pct.value);
+      patchBlend(b => { b.resins[idx].weightPct = Number.isFinite(v) ? v : 0; });
+    });
+
+    const rm = document.createElement('button');
+    rm.type = 'button';
+    rm.className = 'blend-remove-btn';
+    rm.setAttribute('aria-label', 'Remove resin ' + (idx + 1));
+    rm.textContent = '×';
+    rm.disabled = total <= 1;
+    rm.addEventListener('click', () => {
+      patchBlend(b => { b.resins.splice(idx, 1); });
+    });
+
+    row.append(sel, pct, rm);
+    return row;
+  }
+
+  // Attach listeners that drive the blend builder (family dropdown, filler, override, add/save/clear).
+  function attachBlendListeners() {
+    const family = document.getElementById('resinFamily');
+    if (family) {
+      family.addEventListener('change', () => {
+        setState({ resinBlend: blendFromFamilyValue(family.value) });
+      });
+    }
+
+    const addBtn = document.getElementById('add-resin-btn');
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        patchBlend(b => {
+          if ((b.resins || []).length >= MAX_BLEND_RESINS) return;
+          b.resins.push({ resinId: '', weightPct: 0 });
+        });
+      });
+    }
+
+    const fillerType = document.getElementById('fillerType');
+    if (fillerType) {
+      fillerType.addEventListener('change', () => {
+        patchBlend(b => { b.filler = b.filler || { ...BLEND_DEFAULT_FILLER }; b.filler.type = fillerType.value; });
+      });
+    }
+
+    const fillerPct = document.getElementById('fillerPct');
+    if (fillerPct) {
+      fillerPct.addEventListener('input', () => {
+        const v = fillerPct.value === '' ? 0 : parseFloat(fillerPct.value);
+        patchBlend(b => { b.filler = b.filler || { ...BLEND_DEFAULT_FILLER }; b.filler.pct = Number.isFinite(v) ? v : 0; });
+      });
+    }
+
+    const kOverride = document.getElementById('kOverride');
+    if (kOverride) {
+      kOverride.addEventListener('input', () => {
+        const v = kOverride.value === '' ? null : parseFloat(kOverride.value);
+        patchBlend(b => { b.kOverride = (v !== null && Number.isFinite(v) && v > 0) ? v : null; });
+      });
+    }
+
+    const saveBtn = document.getElementById('save-blend-btn');
+    if (saveBtn) saveBtn.addEventListener('click', handleSaveBlend);
+
+    const deleteBtn = document.getElementById('delete-blend-btn');
+    if (deleteBtn) deleteBtn.addEventListener('click', handleDeleteBlend);
+
+    const clearBtn = document.getElementById('clear-blend-btn');
+    if (clearBtn) clearBtn.addEventListener('click', () => setState({ resinBlend: null }));
   }
 
   // Add event listeners for all inputs
@@ -236,7 +581,7 @@
     const active = document.activeElement;
     Object.keys(state).forEach(key => {
       const el = document.getElementById(key);
-      if (el && key !== 'key' && el !== active && el.type !== 'checkbox') {
+      if (el && key !== 'key' && key !== 'resinBlend' && el !== active && el.type !== 'checkbox') {
         el.value = state[key] !== null && state[key] !== undefined ? state[key] : '';
       }
     });
@@ -375,6 +720,7 @@
       patch[key] = TEXT_FIELDS.has(key) ? '' : null;
     });
     if (section === 'auto') patch.autoEstimate = false;
+    if (section === 'resin') patch.resinBlend = null;
     setState(patch);
   }
 
@@ -501,6 +847,90 @@
     });
   }
 
+  // Save the current blend to the Resin Library. Prompts for a name; same key updates in place.
+  async function handleSaveBlend() {
+    if (isSavingBlend) return;
+    const blend = state.resinBlend;
+    if (!blend) return;
+    const k = computeKBlend(blend);
+    if (!(k > 0)) {
+      showToast('Blend incomplete — pick at least one resin first', 'error');
+      return;
+    }
+    const suggested = blend.name || suggestBlendName(blend);
+    const name = (window.prompt('Name this blend (shown in the resin family dropdown):', suggested) || '').trim();
+    if (!name) return;
+
+    const payload = {
+      name,
+      resins: blend.resins.filter(r => r.resinId && r.weightPct > 0),
+      filler: blend.filler && blend.filler.type !== 'none' && blend.filler.pct > 0
+        ? { type: blend.filler.type, pct: blend.filler.pct } : { type: 'none', pct: 0 },
+      kOverride: blend.kOverride
+    };
+
+    isSavingBlend = true;
+    try {
+      const key = await runServer('saveBlend', JSON.stringify(payload));
+      await loadBlendsList();
+      // Link the editor's blend to the saved record so re-saving updates the same row.
+      setState({ resinBlend: { ...cloneBlend(blend), savedBlendKey: key, name } });
+      showToast('Blend saved');
+    } catch (e) {
+      showToast('Save failed: ' + e.message, 'error');
+    } finally {
+      isSavingBlend = false;
+    }
+  }
+
+  // Delete the currently-loaded saved blend from the Resin Library. Composition
+  // stays in the editor (just unlinked) so the user doesn't lose their work mid-flow.
+  async function handleDeleteBlend() {
+    const blend = state.resinBlend;
+    if (!blend || !blend.savedBlendKey) return;
+    const label = blend.name || 'this blend';
+    const ok = await showConfirm({
+      title: 'Delete saved blend?',
+      message: 'Remove "' + label + '" from the Resin Library. Saved parts that reference it keep their own copy of the composition.',
+      confirmLabel: 'Delete blend',
+      cancelLabel: 'Cancel'
+    });
+    if (!ok) return;
+    try {
+      await runServer('deleteBlend', blend.savedBlendKey);
+      await loadBlendsList();
+      // Keep the composition in the editor but unlink it from the deleted record.
+      setState({ resinBlend: { ...cloneBlend(blend), savedBlendKey: null, name: null } });
+      showToast('Blend deleted');
+    } catch (e) {
+      showToast('Delete failed: ' + e.message, 'error');
+    }
+  }
+
+  // Fallback name when the user doesn't provide one — e.g. "PC/ABS 60/40 GF30".
+  function suggestBlendName(b) {
+    const parts = (b.resins || []).filter(r => r.resinId && r.weightPct > 0);
+    if (parts.length === 0) return 'Blend';
+    const names = parts.map(r => BASE_RESINS[r.resinId] ? BASE_RESINS[r.resinId].name.split(' ')[0] : r.resinId).join('/');
+    const ratio = parts.map(r => r.weightPct).join('/');
+    const filler = (b.filler && b.filler.type !== 'none' && b.filler.pct > 0)
+      ? ' ' + ({ glass: 'GF', talc: 'T', mineral: 'M', caco3: 'C' }[b.filler.type] || '?') + b.filler.pct
+      : '';
+    return names + ' ' + ratio + filler;
+  }
+
+  // Fetch the Resin Library from the server.
+  async function loadBlendsList() {
+    try {
+      const json = await runServer('loadAllBlends');
+      savedBlends = JSON.parse(json);
+    } catch (e) {
+      savedBlends = [];
+    }
+    populateResinFamilyOptions();
+    renderBlendBuilder();
+  }
+
   // Load parts list
   async function loadPartsList() {
     try {
@@ -576,9 +1006,10 @@
   function loadPart(key) {
     const part = savedParts.find(p => p.key === key);
     if (part) {
-      state = { ...DEFAULTS, ...part };
+      state = { ...DEFAULTS, ...part, resinBlend: cloneBlend(part.resinBlend) };
       recalculate();
       renderOutputs();
+      renderBlendBuilder();
       updateToolBar();
       updateBadges();
       updateAutoLockUI();
@@ -652,6 +1083,7 @@
     selectedPartKeys.clear();
     recalculate();
     renderOutputs();
+    renderBlendBuilder();
     updateToolBar();
     updateBadges();
     updateAutoLockUI();
@@ -670,12 +1102,15 @@
 
   // Initialize on load
   window.addEventListener('DOMContentLoaded', async () => {
+    populateResinFamilyOptions();
     attachInputListeners();
+    attachBlendListeners();
     const searchEl = document.getElementById('parts-search');
     if (searchEl) searchEl.addEventListener('input', renderPartsList);
-    await loadPartsList();
+    await Promise.all([loadPartsList(), loadBlendsList()]);
     recalculate();
     renderOutputs();
+    renderBlendBuilder();
     updateToolBar();
     updateBadges();
     updateAutoLockUI();

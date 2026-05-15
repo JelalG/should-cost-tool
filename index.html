@@ -61,7 +61,7 @@
           <div class="input-group">
             <label class="input-label">Nominal Wall Thickness (mm)</label>
             <input class="input-field" type="number" id="wallThicknessMm" min="0" step="any" inputmode="decimal" placeholder="e.g. 2.0">
-            <span class="input-help">Average wall — drives cooling time (cycle ≈ 5 + 2.5 × wall²).</span>
+            <span class="input-help">Average wall — drives cooling time (cycle ≈ 5 + k × wall², k from selected resin/blend).</span>
           </div>
           <div class="input-group">
             <label class="input-label">Annual Volume (parts/yr)</label>
@@ -136,6 +136,60 @@
         <button class="reset-btn" onclick="resetSection('resin')">Reset</button>
       </div>
       <div class="section-body">
+        <div class="input-row">
+          <div class="input-group">
+            <label class="input-label">Resin family</label>
+            <select id="resinFamily">
+              <option value="">— none —</option>
+              <optgroup label="Single resin" id="single-resin-optgroup"></optgroup>
+              <optgroup label="Saved blends" id="saved-blends-optgroup"></optgroup>
+              <option value="__custom__">Custom blend…</option>
+            </select>
+            <span class="input-help">Pick a single resin, a saved blend, or build a custom composition. Drives the cooling coefficient used by auto-estimate.</span>
+          </div>
+        </div>
+        <div id="blend-composition" class="blend-composition" hidden>
+          <div class="blend-composition-header">
+            <span>Composition</span>
+            <span class="blend-composition-hint">weight %</span>
+          </div>
+          <div id="blend-resin-rows" class="blend-resin-rows"></div>
+          <div class="blend-actions-row">
+            <button type="button" class="add-row-btn" id="add-resin-btn">+ Add resin</button>
+            <span id="blend-sum-label" class="blend-sum-label"></span>
+          </div>
+          <div class="blend-filler-row">
+            <label class="blend-row-label">Filler</label>
+            <select id="fillerType" class="blend-filler-select">
+              <option value="none">None</option>
+              <option value="glass">Glass fiber</option>
+              <option value="talc">Talc</option>
+              <option value="mineral">Mineral</option>
+              <option value="caco3">CaCO₃</option>
+            </select>
+            <input class="input-field blend-pct-input" type="number" id="fillerPct" min="0" max="60" step="any" inputmode="decimal" placeholder="0">
+            <span class="blend-suffix">%</span>
+          </div>
+          <div class="blend-derived">
+            <span class="blend-derived-label">Derived <var>k</var></span>
+            <span class="blend-derived-value" id="derived-k">— s/mm²</span>
+            <span class="blend-warning" id="blend-warning" hidden></span>
+          </div>
+          <details class="blend-advanced">
+            <summary>Advanced: override <var>k</var></summary>
+            <div class="input-row" style="margin-top: 10px; margin-bottom: 0;">
+              <div class="input-group">
+                <input class="input-field" type="number" id="kOverride" min="0" step="any" inputmode="decimal" placeholder="Leave blank to use derived k">
+                <span class="input-help">Type a measured/quoted k (s/mm²) to bypass the linear-mix math — useful for highly engineered alloys where blending underestimates cooling time.</span>
+              </div>
+            </div>
+          </details>
+          <div class="blend-save-row">
+            <button type="button" class="secondary" id="save-blend-btn">Save as named blend…</button>
+            <button type="button" class="reset-btn" id="delete-blend-btn" hidden>Delete saved</button>
+            <button type="button" class="reset-btn" id="clear-blend-btn">Clear</button>
+          </div>
+        </div>
         <div class="input-row">
           <div class="input-group">
             <label class="input-label">Part Weight (g)</label>
@@ -544,15 +598,32 @@
           <p>Tonnage brackets (<var>baseUSA</var> $/hr): 50t→$32, 100t→$42, 200t→$52, 400t→$68, 700t→$88, 1000t→$110, &gt;1000t→$140. Region multipliers: USA 1.00, Mexico 0.615, China 0.538, Indonesia 0.364.</p>
         </div>
 
+        <div class="formula-block" id="m-blend">
+          <h4><a href="#resin-section">↑ Resin blend (cooling coefficient <var>k</var>)</a></h4>
+          <div class="formula-display">
+            <span class="formula-line"><var>k<sub>blend</sub></var><span class="eq">=</span><span class="frac"><span class="num-top">Σ <var>weight<sub>i</sub></var><span class="op">×</span><var>k<sub>i</sub></var></span><span class="num-bot">Σ <var>weight<sub>i</sub></var></span></span><span class="op">+</span><span class="frac"><span class="num-top"><var>filler<sub>pct</sub></var></span><span class="num-bot"><span class="num">10</span></span></span><span class="op">×</span><var>bump<sub>filler</sub></var></span>
+            <span class="formula-line"><var>cycleTimeSec</var><span class="eq">=</span><span class="num">5</span><span class="op">+</span><var>k<sub>blend</sub></var><span class="op">×</span><var>wall</var><span class="op">²</span></span>
+          </div>
+          <p>Linear weight-fraction mix of base resin cooling constants, with a small additive bump per 10% filler loading. Used only inside auto-estimate to derive cycle time — it doesn't affect resin cost (that runs off <var>resinCostPerKg</var>) or any other downstream cost. The override-<var>k</var> escape hatch bypasses the math for highly engineered alloys (PC/PBT, PPS, LCP, etc.) where linear mixing underestimates cooling.</p>
+          <p><strong>Base resin k (s/mm²):</strong> ABS 2.5, PP 2.0, HDPE 2.2, PS 2.3, PC 3.2, PA6 2.7, PA66 2.6, POM 3.0, PET 2.8, PMMA 3.5, PBT 2.6, TPU 2.6, TPE 2.4.</p>
+          <p><strong>Filler bumps per 10% loading:</strong> glass fiber +0.15, talc +0.10, mineral +0.10, CaCO₃ +0.08.</p>
+          <p><strong>Accuracy:</strong> ±10–15% for commodity blends and lightly-filled engineering resins. Highly engineered alloys (e.g. PC/PBT, PPS, LCP) will read low — use the override.</p>
+          <ul class="refs">
+            <li><a href="https://www.hanserpublications.com/" target="_blank" rel="noopener">Osswald — Injection Molding Handbook (cooling time fundamentals)</a></li>
+            <li><a href="https://www.ptonline.com/" target="_blank" rel="noopener">Plastics Technology — filler effects on cooling</a></li>
+          </ul>
+        </div>
+
         <div class="formula-block" id="m-auto">
           <h4>Auto-estimate (cavities, cycle, utilization, tonnage)</h4>
           <div class="formula-display">
             <span class="formula-line"><var>utilization</var><span class="eq">=</span><span class="num">0.85</span></span>
-            <span class="formula-line"><var>cycleTimeSec</var><span class="eq">=</span><span class="num">5</span><span class="op">+</span><span class="num">2.5</span><span class="op">×</span><var>wall</var><span class="op">²</span></span>
+            <span class="formula-line"><var>k</var><span class="eq">=</span><var>k<sub>blend</sub></var><span class="cond">if a resin/blend is set, else</span><span class="num">2.5</span></span>
+            <span class="formula-line"><var>cycleTimeSec</var><span class="eq">=</span><span class="num">5</span><span class="op">+</span><var>k</var><span class="op">×</span><var>wall</var><span class="op">²</span></span>
             <span class="formula-line"><var>cavities</var><span class="eq">=</span>snap<span class="paren">(</span><span class="frac"><span class="num-top"><var>annualVolume</var><span class="op">×</span><var>cycleTimeSec</var></span><span class="num-bot"><span class="num">3600</span><span class="op">×</span><var>utilization</var><span class="op">×</span><span class="num">4000</span></span></span><span class="paren">)</span></span>
             <span class="formula-line"><var>tonnage</var><span class="eq">=</span>snap<span class="paren">(</span><var>partWeightG</var><span class="op">×</span><var>cavities</var><span class="op">×</span><span class="paren">(</span><span class="num">1</span><span class="op">+</span><var>runnerPct</var><span class="op">÷</span><span class="num">100</span><span class="paren">)</span><span class="paren">)</span></span>
           </div>
-          <p>Cycle time follows the standard cooling-time approximation (cooling ∝ wall²) plus ~5s fill/eject. Cavities sizes the tool to produce <var>annualVolume</var> parts in a 4,000 hr/yr production window. Tonnage uses the ~1 t/g shot-weight rule of thumb. All four snap to common molding values: cavities ∈ {1, 2, 4, 6, 8, 12, 16, 24, 32, 48, 64}, tonnage ∈ {50, 100, 200, 400, 700, 1000, 1500}. Confidence: ±15% on cycle time, ±1 cavity step on cavities, ±1 bracket on tonnage. Always validate against a quote when stakes are material.</p>
+          <p>Cycle time follows the standard cooling-time approximation (cooling ∝ wall²) plus ~5s fill/eject. The cooling coefficient <var>k</var> comes from the resin blend when set (<a href="#m-blend">see blend math ↑</a>); otherwise it falls back to <span class="num">2.5</span> as a commodity-resin default. Cavities sizes the tool to produce <var>annualVolume</var> parts in a 4,000 hr/yr production window. Tonnage uses the ~1 t/g shot-weight rule of thumb. All four snap to common molding values: cavities ∈ {1, 2, 4, 6, 8, 12, 16, 24, 32, 48, 64}, tonnage ∈ {50, 100, 200, 400, 700, 1000, 1500}. Confidence: ±15% on cycle time, ±1 cavity step on cavities, ±1 bracket on tonnage. Always validate against a quote when stakes are material.</p>
         </div>
 
         <div class="formula-block" id="m-constants">

@@ -92,8 +92,11 @@ const FIELD_KEYS = [
   'runnerWeightOverride', 'regrindRate', 'cavities', 'cycleTimeSec',
   'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'machineRateOverride',
   'laborRateOverride', 'ohRateOverride', 'marginRateOverride', 'toolingCost',
-  'toolLife', 'cumulativeVolume', 'wallThicknessMm', 'annualVolume', 'autoEstimate'
+  'toolLife', 'cumulativeVolume', 'wallThicknessMm', 'annualVolume', 'autoEstimate',
+  'resinBlend'
 ];
+
+const RESIN_LIBRARY_HEADER = ['key', 'name', 'resinsJson', 'fillerType', 'fillerPct', 'kOverride', 'updatedAt'];
 
 // Helper to get region object
 function getRegion(regionName) {
