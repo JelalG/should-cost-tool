@@ -376,10 +376,12 @@
         <button class="reset-btn" onclick="loadPartsList()">↻ Refresh</button>
       </div>
       <div class="section-body">
-        <div id="parts-list" class="parts-list"></div>
+        <input class="input-field" type="search" id="parts-search" placeholder="Search by Part Number or Name…" autocomplete="off">
+        <span class="input-help" id="parts-search-help" style="margin-bottom: 8px;">Start typing to find a saved part.</span>
+        <div id="parts-list" class="parts-list" style="display: none;"></div>
         <div style="margin-top: 12px;">
           <button onclick="handleNewPart()" style="width: 100%; margin-bottom: 8px;">New Part</button>
-          <button onclick="handleExport()" class="secondary" style="width: 100%; margin-bottom: 8px;">Export Selected</button>
+          <button onclick="handleExport()" class="secondary" style="width: 100%; margin-bottom: 8px;">Export Selected (<span id="selected-count">0</span>)</button>
         </div>
       </div>
     </div>
@@ -976,10 +978,40 @@
   }
 
   // Render parts list — builds DOM nodes (no innerHTML) so saved part names cannot inject HTML/JS.
+  // Only shows results matching the search query; empty query = hidden list.
   function renderPartsList() {
     const container = document.getElementById('parts-list');
+    const help = document.getElementById('parts-search-help');
+    const searchEl = document.getElementById('parts-search');
+    const q = (searchEl ? searchEl.value : '').trim().toLowerCase();
+
+    document.getElementById('selected-count').textContent = selectedPartKeys.size;
+
     container.replaceChildren();
-    savedParts.forEach(part => {
+
+    if (!q) {
+      container.style.display = 'none';
+      help.textContent = savedParts.length
+        ? 'Start typing to search ' + savedParts.length + ' saved part' + (savedParts.length === 1 ? '' : 's') + '.'
+        : 'No saved parts yet — save one below to get started.';
+      return;
+    }
+
+    const matches = savedParts.filter(p =>
+      (p.partNumber || '').toLowerCase().includes(q) ||
+      (p.partName || '').toLowerCase().includes(q)
+    );
+
+    if (matches.length === 0) {
+      container.style.display = 'none';
+      help.textContent = 'No matches for "' + q + '".';
+      return;
+    }
+
+    container.style.display = '';
+    help.textContent = matches.length + ' match' + (matches.length === 1 ? '' : 'es') + '.';
+
+    matches.forEach(part => {
       const item = document.createElement('div');
       item.className = 'part-item';
 
@@ -1023,6 +1055,7 @@
     } else {
       selectedPartKeys.delete(key);
     }
+    document.getElementById('selected-count').textContent = selectedPartKeys.size;
   }
 
   // Delete part
@@ -1080,6 +1113,8 @@
   // Initialize on load
   window.addEventListener('DOMContentLoaded', async () => {
     attachInputListeners();
+    const searchEl = document.getElementById('parts-search');
+    if (searchEl) searchEl.addEventListener('input', renderPartsList);
     await loadPartsList();
     recalculate();
     renderOutputs();
