@@ -969,6 +969,38 @@
     }
   }
 
+  // Format the "saved by X · 3d ago" suffix for a library row. Falls back gracefully
+  // when either field is missing (older rows predate the metadata columns; external
+  // Google accounts also return an empty email).
+  function formatSavedMeta(part) {
+    const who = (part.savedBy || '').trim();
+    const when = (part.savedAt || '').trim();
+    const parts = [];
+    if (who) parts.push(who);
+    if (when) {
+      const rel = formatRelativeTime(when);
+      if (rel) parts.push(rel);
+    }
+    return parts.length ? 'saved by ' + parts.join(' · ') : '';
+  }
+
+  function formatRelativeTime(iso) {
+    const t = Date.parse(iso);
+    if (!t) return '';
+    const diffMs = Date.now() - t;
+    const sec = Math.round(diffMs / 1000);
+    if (sec < 60) return 'just now';
+    const min = Math.round(sec / 60);
+    if (min < 60) return min + 'm ago';
+    const hr = Math.round(min / 60);
+    if (hr < 24) return hr + 'h ago';
+    const day = Math.round(hr / 24);
+    if (day < 30) return day + 'd ago';
+    const mo = Math.round(day / 30);
+    if (mo < 12) return mo + 'mo ago';
+    return Math.round(mo / 12) + 'y ago';
+  }
+
   // Render parts list — builds DOM nodes (no innerHTML) so saved part names cannot inject HTML/JS.
   // Only shows results matching the search query; empty query = hidden list.
   function renderPartsList() {
@@ -1015,8 +1047,19 @@
       const label = document.createElement('label');
       label.className = 'part-item-label';
       label.style.cursor = 'pointer';
-      label.textContent = (part.partNumber || 'N/A') + ' - ' + (part.partName || 'Unnamed');
       label.addEventListener('click', () => loadPart(part.key));
+
+      const title = document.createElement('span');
+      title.textContent = (part.partNumber || 'N/A') + ' - ' + (part.partName || 'Unnamed');
+      label.appendChild(title);
+
+      const metaText = formatSavedMeta(part);
+      if (metaText) {
+        const meta = document.createElement('span');
+        meta.className = 'part-item-meta';
+        meta.textContent = metaText;
+        label.appendChild(meta);
+      }
 
       const del = document.createElement('button');
       del.className = 'part-item-delete';

@@ -13,24 +13,59 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
+// Resolve the backing spreadsheet, auto-creating it on first run so end users
+// don't need to manually wire PARTS_SHEET_ID in Script Properties or share a
+// pre-existing Drive file. Subsequent calls reuse the stored ID.
+function getOrCreateBackingSpreadsheet() {
+  const scriptProps = PropertiesService.getScriptProperties();
+  let sheetId = scriptProps.getProperty('PARTS_SHEET_ID');
+  if (sheetId) {
+    try {
+      return SpreadsheetApp.openById(sheetId);
+    } catch (e) {
+      // Stored ID is stale (file deleted or access revoked) — fall through and create a new one.
+      Logger.log('Stored PARTS_SHEET_ID unusable, creating new sheet: ' + e.message);
+    }
+  }
+  const ss = SpreadsheetApp.create('Should Cost — Parts Library');
+  scriptProps.setProperty('PARTS_SHEET_ID', ss.getId());
+  return ss;
+}
+
+// Server-owned metadata columns appended after FIELD_KEYS. Never sent by the
+// client — stamped at write time so the library shows who edited what.
+const META_KEYS = ['savedBy', 'savedAt'];
+
+// Best-effort email of the user running the request. In "Execute as: Me" mode,
+// this resolves to the end user's email only when they share a Workspace
+// domain with the script owner; external Google accounts return ''.
+function getActiveUserEmail() {
+  try {
+    return Session.getActiveUser().getEmail() || '';
+  } catch (e) {
+    return '';
+  }
+}
+
 // Get or create the Parts Library sheet with a header row.
-// On existing sheets, extend the header row when FIELD_KEYS has grown
-// (e.g. resinBlend was added later) so save/load stay aligned.
+// On existing sheets, extend the header row when FIELD_KEYS or META_KEYS has
+// grown (e.g. resinBlend, savedBy added later) so save/load stay aligned.
 function getOrCreatePartsSheet(ss) {
+  const fullHeader = [...FIELD_KEYS, ...META_KEYS];
   let sh = ss.getSheetByName('Parts Library');
   if (!sh) {
     sh = ss.insertSheet('Parts Library');
-    sh.appendRow(FIELD_KEYS);
+    sh.appendRow(fullHeader);
     sh.setFrozenRows(1);
     return sh;
   }
   if (sh.getLastRow() === 0) {
-    sh.appendRow(FIELD_KEYS);
+    sh.appendRow(fullHeader);
     sh.setFrozenRows(1);
     return sh;
   }
   const header = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0];
-  const missing = FIELD_KEYS.filter(k => header.indexOf(k) === -1);
+  const missing = fullHeader.filter(k => header.indexOf(k) === -1);
   if (missing.length > 0) {
     sh.getRange(1, header.length + 1, 1, missing.length).setValues([missing]);
   }
@@ -38,15 +73,26 @@ function getOrCreatePartsSheet(ss) {
 }
 
 // Get or create the Resin Library sheet with a header row.
+// Extends an existing sheet's header with savedBy/savedAt so old blends
+// migrate transparently.
 function getOrCreateResinSheet(ss) {
+  const fullHeader = [...RESIN_LIBRARY_HEADER, ...META_KEYS];
   let sh = ss.getSheetByName('Resin Library');
   if (!sh) {
     sh = ss.insertSheet('Resin Library');
-    sh.appendRow(RESIN_LIBRARY_HEADER);
+    sh.appendRow(fullHeader);
     sh.setFrozenRows(1);
-  } else if (sh.getLastRow() === 0) {
-    sh.appendRow(RESIN_LIBRARY_HEADER);
+    return sh;
+  }
+  if (sh.getLastRow() === 0) {
+    sh.appendRow(fullHeader);
     sh.setFrozenRows(1);
+    return sh;
+  }
+  const header = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0];
+  const missing = fullHeader.filter(k => header.indexOf(k) === -1);
+  if (missing.length > 0) {
+    sh.getRange(1, header.length + 1, 1, missing.length).setValues([missing]);
   }
   return sh;
 }
@@ -58,19 +104,17 @@ function buildSlug(inp) {
 }
 
 // Build spreadsheet row from input object. resinBlend is serialized to JSON so it
-// fits in a single cell — every other field stays a primitive.
-function buildRow(slug, inp) {
-  const row = [];
-  FIELD_KEYS.forEach(key => {
-    if (key === 'key') {
-      row.push(slug);
-    } else if (key === 'resinBlend') {
-      row.push(inp.resinBlend ? JSON.stringify(inp.resinBlend) : '');
-    } else {
-      row.push(inp[key] !== undefined ? inp[key] : '');
-    }
+// fits in a single cell — every other field stays a primitive. The row is built
+// to match the sheet's actual header order so meta columns (savedBy/savedAt)
+// land in their real positions even after schema migrations.
+function buildRow(header, slug, inp, meta) {
+  return header.map(key => {
+    if (key === 'key') return slug;
+    if (key === 'resinBlend') return inp.resinBlend ? JSON.stringify(inp.resinBlend) : '';
+    if (key === 'savedBy') return meta.savedBy;
+    if (key === 'savedAt') return meta.savedAt;
+    return inp[key] !== undefined && inp[key] !== null ? inp[key] : '';
   });
-  return row;
 }
 
 // Convert spreadsheet row back to input object
@@ -103,19 +147,14 @@ function rowToInp(header, row) {
 function savePart(partJson) {
   try {
     const inp = JSON.parse(partJson);
-    const scriptProps = PropertiesService.getScriptProperties();
-    const sheetId = scriptProps.getProperty('PARTS_SHEET_ID');
-
-    if (!sheetId) {
-      throw new Error('PARTS_SHEET_ID not set in Script Properties');
-    }
-
-    const ss = SpreadsheetApp.openById(sheetId);
+    const ss = getOrCreateBackingSpreadsheet();
     const sh = getOrCreatePartsSheet(ss);
     const data = sh.getDataRange().getValues();
+    const header = data[0];
 
     const slug = buildSlug(inp);
-    const row = buildRow(slug, inp);
+    const meta = { savedBy: getActiveUserEmail(), savedAt: new Date().toISOString() };
+    const row = buildRow(header, slug, inp, meta);
 
     // Find existing row by key (col 0)
     let rowIdx = -1;
@@ -142,14 +181,7 @@ function savePart(partJson) {
 // Load all parts from library
 function loadAllParts() {
   try {
-    const scriptProps = PropertiesService.getScriptProperties();
-    const sheetId = scriptProps.getProperty('PARTS_SHEET_ID');
-
-    if (!sheetId) {
-      return JSON.stringify([]);
-    }
-
-    const ss = SpreadsheetApp.openById(sheetId);
+    const ss = getOrCreateBackingSpreadsheet();
     const sh = getOrCreatePartsSheet(ss);
     const data = sh.getDataRange().getValues();
 
@@ -174,14 +206,7 @@ function loadAllParts() {
 // Delete part from library
 function deletePart(key) {
   try {
-    const scriptProps = PropertiesService.getScriptProperties();
-    const sheetId = scriptProps.getProperty('PARTS_SHEET_ID');
-
-    if (!sheetId) {
-      throw new Error('PARTS_SHEET_ID not set');
-    }
-
-    const ss = SpreadsheetApp.openById(sheetId);
+    const ss = getOrCreateBackingSpreadsheet();
     const sh = getOrCreatePartsSheet(ss);
     const data = sh.getDataRange().getValues();
 
@@ -208,25 +233,27 @@ function buildBlendSlug(name) {
 function saveBlend(blendJson) {
   try {
     const inp = JSON.parse(blendJson);
-    const scriptProps = PropertiesService.getScriptProperties();
-    const sheetId = scriptProps.getProperty('PARTS_SHEET_ID');
-    if (!sheetId) throw new Error('PARTS_SHEET_ID not set in Script Properties');
-
-    const ss = SpreadsheetApp.openById(sheetId);
+    const ss = getOrCreateBackingSpreadsheet();
     const sh = getOrCreateResinSheet(ss);
     const data = sh.getDataRange().getValues();
+    const header = data[0];
 
     const slug = buildBlendSlug(inp.name);
     const filler = inp.filler || { type: 'none', pct: 0 };
-    const row = [
-      slug,
-      inp.name || '',
-      JSON.stringify(inp.resins || []),
-      filler.type || 'none',
-      filler.pct || 0,
-      inp.kOverride !== null && inp.kOverride !== undefined ? inp.kOverride : '',
-      new Date().toISOString()
-    ];
+    const nowIso = new Date().toISOString();
+    const email = getActiveUserEmail();
+    const cells = {
+      key: slug,
+      name: inp.name || '',
+      resinsJson: JSON.stringify(inp.resins || []),
+      fillerType: filler.type || 'none',
+      fillerPct: filler.pct || 0,
+      kOverride: inp.kOverride !== null && inp.kOverride !== undefined ? inp.kOverride : '',
+      updatedAt: nowIso,
+      savedBy: email,
+      savedAt: nowIso
+    };
+    const row = header.map(col => cells[col] !== undefined ? cells[col] : '');
 
     let rowIdx = -1;
     for (let i = 1; i < data.length; i++) {
@@ -247,11 +274,7 @@ function saveBlend(blendJson) {
 // Load all named blends. Each record is hydrated to the same shape state.resinBlend uses.
 function loadAllBlends() {
   try {
-    const scriptProps = PropertiesService.getScriptProperties();
-    const sheetId = scriptProps.getProperty('PARTS_SHEET_ID');
-    if (!sheetId) return JSON.stringify([]);
-
-    const ss = SpreadsheetApp.openById(sheetId);
+    const ss = getOrCreateBackingSpreadsheet();
     const sh = getOrCreateResinSheet(ss);
     const data = sh.getDataRange().getValues();
     if (data.length < 2) return JSON.stringify([]);
@@ -264,12 +287,16 @@ function loadAllBlends() {
         let resins = [];
         try { resins = JSON.parse(r[idx('resinsJson')] || '[]'); } catch (e) {}
         const kRaw = r[idx('kOverride')];
+        const savedByCol = idx('savedBy');
+        const savedAtCol = idx('savedAt');
         return {
           key: r[idx('key')],
           name: r[idx('name')],
           resins: resins,
           filler: { type: r[idx('fillerType')] || 'none', pct: parseFloat(r[idx('fillerPct')]) || 0 },
-          kOverride: (kRaw === '' || kRaw === null || kRaw === undefined) ? null : parseFloat(kRaw)
+          kOverride: (kRaw === '' || kRaw === null || kRaw === undefined) ? null : parseFloat(kRaw),
+          savedBy: savedByCol >= 0 ? (r[savedByCol] || '') : '',
+          savedAt: savedAtCol >= 0 ? (r[savedAtCol] || '') : ''
         };
       })
       .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -282,10 +309,7 @@ function loadAllBlends() {
 
 function deleteBlend(key) {
   try {
-    const scriptProps = PropertiesService.getScriptProperties();
-    const sheetId = scriptProps.getProperty('PARTS_SHEET_ID');
-    if (!sheetId) throw new Error('PARTS_SHEET_ID not set');
-    const ss = SpreadsheetApp.openById(sheetId);
+    const ss = getOrCreateBackingSpreadsheet();
     const sh = getOrCreateResinSheet(ss);
     const data = sh.getDataRange().getValues();
     for (let i = 1; i < data.length; i++) {
@@ -304,12 +328,6 @@ function exportPartsToSheet(partsJson) {
     const parts = JSON.parse(partsJson);
     const scriptProps = PropertiesService.getScriptProperties();
     const folderId = scriptProps.getProperty('EXPORT_FOLDER_ID');
-
-    if (!folderId) {
-      throw new Error('EXPORT_FOLDER_ID not set');
-    }
-
-    const folder = DriveApp.getFolderById(folderId);
     const today = Utilities.formatDate(new Date(), 'America/Chicago', 'yyyy-MM-dd');
 
     // Build filename
@@ -317,11 +335,19 @@ function exportPartsToSheet(partsJson) {
     const name = 'should_cost_' + (first.partNumber ? first.partNumber + '_' : '') +
                  first.partName.replace(/\s+/g, '_') + '_' + today;
 
-    // Create sheet
+    // Create sheet. Move to EXPORT_FOLDER_ID when set; otherwise leave it in
+    // the owner's My Drive root so exports work without any setup.
     const ss = SpreadsheetApp.create(name);
-    const file = DriveApp.getFileById(ss.getId());
-    folder.addFile(file);
-    DriveApp.getRootFolder().removeFile(file);
+    if (folderId) {
+      try {
+        const folder = DriveApp.getFolderById(folderId);
+        const file = DriveApp.getFileById(ss.getId());
+        folder.addFile(file);
+        DriveApp.getRootFolder().removeFile(file);
+      } catch (e) {
+        Logger.log('EXPORT_FOLDER_ID unusable, leaving export in My Drive: ' + e.message);
+      }
+    }
 
     const sh = ss.getActiveSheet();
     sh.setName('Should Cost Output');
