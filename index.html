@@ -69,6 +69,18 @@
             <span class="input-help">Yearly demand — drives cavity selection (targets ~4,000 hr/yr per tool).</span>
           </div>
         </div>
+        <div class="input-row" style="margin-top: 12px;">
+          <div class="input-group">
+            <label class="input-label">Projected Area (cm²)</label>
+            <input class="input-field" type="number" id="projectedAreaCm2" min="0" step="any" inputmode="decimal" placeholder="e.g. 120">
+            <span class="input-help">Cross-section perpendicular to mold clamp (largest of the bbox face areas, divided by 100 for cm²). Required for flat / high-aspect parts — for those, projArea drives tonnage, not shot weight. Use FreeCAD script to extract.</span>
+          </div>
+          <div class="input-group">
+            <label class="input-label">Clamp Pressure (T/cm²)</label>
+            <input class="input-field" type="number" id="projAreaClampCoeff" min="0" step="any" inputmode="decimal" value="3.0">
+            <span class="input-help">Resin-dependent clamp force per cm² of projected area. 3.0 for glass-filled engineering resins (PBT-GF30, PA66-GF30), 2.0 for unfilled commodity (PP, PE, ABS), 4.0 for high-pressure (PC, PSU).</span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -226,7 +238,7 @@
           <div class="input-group">
             <label class="input-label">Resin Cost ($/kg)</label>
             <input class="input-field" type="number" id="resinCostPerKg" min="0" step="any" inputmode="decimal" value="2.98">
-            <span class="input-help">Material price per kilogram. Use <strong>local market price</strong> for the molding region, not the North American spec-sheet price. Reference: PBT-GF30 ~ $4.50 USA / $3.80 MX / $2.75 CN / $3.00 ID. Commodity PP/PE ~ $1.80–2.20 globally.</span>
+            <span class="input-help">Material price per kilogram for the molding region. <strong>Match the actual grade</strong> the supplier will use: branded RTP/Sabic/Lanxess specs cost ~the same globally even in China; only generic local equivalents see the regional discount. Reference for PBT-GF30: <strong>RTP 1005 / branded ~$4.00–$4.50/kg</strong> in China &amp; USA; <strong>generic local PBT-GF30 ~$2.75–$3.00/kg</strong> in China only. Commodity PP/PE ~$1.80–$2.20/kg globally.</span>
           </div>
         </div>
       </div>

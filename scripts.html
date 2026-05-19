@@ -32,7 +32,13 @@
     // Minutes of secondary ops per part. 0 = clean-shot mold-only (most parts).
     secOpsMin: 0,
     // 1 operator per N machines. Null = use regional default (USA 1, MX 2, CN 4, ID 5).
-    operatorsPerMachineOverride: null
+    operatorsPerMachineOverride: null,
+    // Projected area in cm² (clamp cross-section). Drives tonnage when the part
+    // is flat / high-aspect (lids, plates) — for those, projArea × coeff
+    // dominates shot weight × 1.0.
+    projectedAreaCm2: null,
+    // Tonnage per cm² for the clamp-from-area calc. 3.0 default for GF-filled.
+    projAreaClampCoeff: 3.0
   };
 
   // Auto-estimate constants — see methodology block #m-auto for derivations.
@@ -40,7 +46,8 @@
   const AUTO_UTILIZATION  = 0.85;       // industry-standard utilization default
   const AUTO_COOLING_K    = 2.5;        // fallback cooling coefficient (s/mm²) when no resin/blend selected
   const AUTO_OVERHEAD_S   = 5;          // fill + eject overhead (s)
-  const AUTO_CLAMP_T_PER_G = 1.0;       // rough rule of thumb: 1 ton per gram of shot weight
+  const AUTO_CLAMP_T_PER_G = 1.0;       // shot-weight rule of thumb (lower bound)
+  const AUTO_CLAMP_T_PER_CM2 = 3.0;     // projected-area pressure (GF-filled default)
   const CAVITY_STEPS = [1, 2, 4, 6, 8, 12, 16, 24, 32, 48, 64];
   const TONNAGE_STEPS = [50, 100, 200, 400, 700, 1000, 1500];
   const AUTO_FIELDS = ['cavities', 'cycleTimeSec', 'utilization', 'tonnage'];
@@ -119,10 +126,20 @@
 
     const out = { utilization, cycleTimeSec, cavities };
 
+    // Tonnage is the MAX of two independent clamp requirements:
+    //  - Shot-weight-based: shotG × 1.0 T/g (lower bound, accurate for compact parts)
+    //  - Projected-area-based: projArea × 3.0 T/cm² (dominates for flat / high-aspect
+    //    parts like lids — a 25g armature with 120 cm² projected area really
+    //    needs 360T, not 50T)
     const pw = s.partWeightG, rp = s.runnerPct;
     if (pw > 0 && rp !== null && rp !== undefined && rp >= 0) {
       const shotG = pw * cavities * (1 + rp / 100);
-      const tonRaw = shotG * AUTO_CLAMP_T_PER_G;
+      const tonByShot = shotG * AUTO_CLAMP_T_PER_G;
+      const projArea = s.projectedAreaCm2;
+      const coeff = (s.projAreaClampCoeff > 0) ? s.projAreaClampCoeff : AUTO_CLAMP_T_PER_CM2;
+      // Project area is per-cavity; multi-cav molds need clamp for all cavities.
+      const tonByArea = (projArea > 0) ? projArea * cavities * coeff : 0;
+      const tonRaw = Math.max(tonByShot, tonByArea);
       out.tonnage = TONNAGE_STEPS.find(t => t >= tonRaw) || TONNAGE_STEPS[TONNAGE_STEPS.length - 1];
     }
     return out;
@@ -465,7 +482,7 @@
 
   // Add event listeners for all inputs
   function attachInputListeners() {
-    const inputs = ['partNumber', 'partName', 'region', 'partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'machineRateOverride', 'laborRateOverride', 'ohRateOverride', 'marginRateOverride', 'toolingCost', 'toolLife', 'cumulativeVolume', 'wallThicknessMm', 'annualVolume', 'secOpsMin', 'operatorsPerMachineOverride'];
+    const inputs = ['partNumber', 'partName', 'region', 'partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'machineRateOverride', 'laborRateOverride', 'ohRateOverride', 'marginRateOverride', 'toolingCost', 'toolLife', 'cumulativeVolume', 'wallThicknessMm', 'annualVolume', 'secOpsMin', 'operatorsPerMachineOverride', 'projectedAreaCm2', 'projAreaClampCoeff'];
 
     inputs.forEach(id => {
       const el = document.getElementById(id);
@@ -779,7 +796,7 @@
   // The 'auto' reset also flips autoEstimate off so the four target fields unlock.
   function resetSection(section) {
     const resetMap = {
-      auto: ['wallThicknessMm', 'annualVolume'],
+      auto: ['wallThicknessMm', 'annualVolume', 'projectedAreaCm2', 'projAreaClampCoeff'],
       part: ['partNumber', 'partName', 'region', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate'],
       resin: ['partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'resinCostPerKg'],
       machine: ['tonnage', 'machineRateOverride'],

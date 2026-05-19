@@ -108,7 +108,14 @@ const DEFAULTS = {
   secOpsMin: 0,
   // Operators tending one machine. Null = use regional default. Use this to
   // model "one operator runs N machines" common in offshore molding shops.
-  operatorsPerMachineOverride: null
+  operatorsPerMachineOverride: null,
+  // Projected area in cm² (cross-section perpendicular to mold clamp). Used by
+  // auto-tonnage to compute clamp force from projected area × pressure factor.
+  // For high-aspect parts (lids, plates), this is the *real* tonnage driver.
+  projectedAreaCm2: null,
+  // Tonnage per cm² of projected area. 3.0 for glass-filled engineering resins,
+  // 2.0 for unfilled commodity resins, 4.0 for high-pressure (PC, PSU, LCP).
+  projAreaClampCoeff: 3.0
 };
 
 const FIELD_KEYS = [
@@ -117,7 +124,8 @@ const FIELD_KEYS = [
   'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'machineRateOverride',
   'laborRateOverride', 'ohRateOverride', 'marginRateOverride', 'toolingCost',
   'toolLife', 'cumulativeVolume', 'wallThicknessMm', 'annualVolume', 'autoEstimate',
-  'resinBlend', 'comparisonMode', 'secOpsMin', 'operatorsPerMachineOverride'
+  'resinBlend', 'comparisonMode', 'secOpsMin', 'operatorsPerMachineOverride',
+  'projectedAreaCm2', 'projAreaClampCoeff'
 ];
 
 const RESIN_LIBRARY_HEADER = ['key', 'name', 'resinsJson', 'fillerType', 'fillerPct', 'kOverride', 'updatedAt'];

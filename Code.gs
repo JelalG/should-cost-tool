@@ -134,7 +134,7 @@ function rowToInp(header, row) {
         try { inp.resinBlend = JSON.parse(val); }
         catch (e) { inp.resinBlend = null; }
       }
-    } else if (['partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'machineRateOverride', 'laborRateOverride', 'ohRateOverride', 'marginRateOverride', 'toolingCost', 'toolLife', 'cumulativeVolume', 'wallThicknessMm', 'annualVolume', 'secOpsMin', 'operatorsPerMachineOverride'].includes(key)) {
+    } else if (['partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'machineRateOverride', 'laborRateOverride', 'ohRateOverride', 'marginRateOverride', 'toolingCost', 'toolLife', 'cumulativeVolume', 'wallThicknessMm', 'annualVolume', 'secOpsMin', 'operatorsPerMachineOverride', 'projectedAreaCm2', 'projAreaClampCoeff'].includes(key)) {
       inp[key] = val === '' ? null : parseFloat(val);
     } else {
       inp[key] = val;
