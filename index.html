@@ -102,6 +102,14 @@
             </select>
             <span class="input-help">Where the part is molded — sets labor, overhead, duty, and freight defaults.</span>
           </div>
+          <div class="input-group">
+            <label class="input-label">Cost basis</label>
+            <div class="radio-group">
+              <label class="radio-option"><input type="radio" name="comparisonMode" value="exw" checked> EXW (supplier quote)</label>
+              <label class="radio-option"><input type="radio" name="comparisonMode" value="landed"> Landed (BPC dock)</label>
+            </div>
+            <span class="input-help">EXW excludes duty + ocean freight — compare apples-to-apples with a supplier quote. Landed adds 25% China tariff and freight on top.</span>
+          </div>
         </div>
         <div class="input-row">
           <div class="input-group">
@@ -218,7 +226,7 @@
           <div class="input-group">
             <label class="input-label">Resin Cost ($/kg)</label>
             <input class="input-field" type="number" id="resinCostPerKg" min="0" step="any" inputmode="decimal" value="2.98">
-            <span class="input-help">Material price per kilogram of resin.</span>
+            <span class="input-help">Material price per kilogram. Use <strong>local market price</strong> for the molding region, not the North American spec-sheet price. Reference: PBT-GF30 ~ $4.50 USA / $3.80 MX / $2.75 CN / $3.00 ID. Commodity PP/PE ~ $1.80–2.20 globally.</span>
           </div>
         </div>
       </div>
@@ -270,6 +278,18 @@
           </div>
         </div>
         <div id="oh-rate-badge" class="override-badge default">default: regional rate</div>
+        <div class="input-row" style="margin-top: 12px;">
+          <div class="input-group">
+            <label class="input-label">Secondary ops (min/part)</label>
+            <input class="input-field" type="number" id="secOpsMin" min="0" step="any" inputmode="decimal" value="0" placeholder="0 for clean-shot parts">
+            <span class="input-help">Minutes of post-mold work per part (trim, kit, pad-print, assembly). 0 for clean-shot molded parts — most should be 0.</span>
+          </div>
+          <div class="input-group">
+            <label class="input-label">Operators per machine</label>
+            <input class="input-field" type="number" id="operatorsPerMachineOverride" min="0.01" step="any" inputmode="decimal" placeholder="Leave blank for regional default">
+            <span class="input-help">How many machines one operator tends. Blank uses regional default (USA 1, MX 2, CN 4, ID 5). Higher = lower direct labor per part.</span>
+          </div>
+        </div>
       </div>
     </div>
 

@@ -25,7 +25,14 @@
     wallThicknessMm: null,
     annualVolume: null,
     autoEstimate: false,
-    resinBlend: null  // { resins: [{resinId, weightPct}], filler: {type, pct}, kOverride, savedBlendKey, name }
+    resinBlend: null,  // { resins: [{resinId, weightPct}], filler: {type, pct}, kOverride, savedBlendKey, name }
+    // 'exw' = compare apples-to-apples with a supplier quote (excludes duty + freight).
+    // 'landed' = total cost to Base Power's dock (includes 25% Section 301 duty + ocean freight).
+    comparisonMode: 'exw',
+    // Minutes of secondary ops per part. 0 = clean-shot mold-only (most parts).
+    secOpsMin: 0,
+    // 1 operator per N machines. Null = use regional default (USA 1, MX 2, CN 4, ID 5).
+    operatorsPerMachineOverride: null
   };
 
   // Auto-estimate constants — see methodology block #m-auto for derivations.
@@ -458,7 +465,7 @@
 
   // Add event listeners for all inputs
   function attachInputListeners() {
-    const inputs = ['partNumber', 'partName', 'region', 'partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'machineRateOverride', 'laborRateOverride', 'ohRateOverride', 'marginRateOverride', 'toolingCost', 'toolLife', 'cumulativeVolume', 'wallThicknessMm', 'annualVolume'];
+    const inputs = ['partNumber', 'partName', 'region', 'partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'machineRateOverride', 'laborRateOverride', 'ohRateOverride', 'marginRateOverride', 'toolingCost', 'toolLife', 'cumulativeVolume', 'wallThicknessMm', 'annualVolume', 'secOpsMin', 'operatorsPerMachineOverride'];
 
     inputs.forEach(id => {
       const el = document.getElementById(id);
@@ -489,15 +496,27 @@
     if (toggle) {
       toggle.addEventListener('change', (e) => setState({ autoEstimate: !!e.target.checked }));
     }
+
+    // Comparison mode is a radio group: 'exw' (compare to supplier quote) vs.
+    // 'landed' (total to Base Power's dock). Affects whether duty + freight are
+    // added on top of supplierPrice.
+    const modeRadios = document.querySelectorAll('input[name="comparisonMode"]');
+    modeRadios.forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        if (e.target.checked) setState({ comparisonMode: e.target.value });
+      });
+    });
   }
 
-  // Client-side cost calculation (mirrors Calc.gs)
+  // Client-side cost calculation (mirrors Calc.gs).
+  // Stacking: mfgCost → (×SGA) → (×margin) → supplierPrice → +freight +duty → landedCost.
+  // comparisonMode='exw' returns supplierPrice; 'landed' returns landedCost.
   function calcSC(inp) {
     const REGIONS = {
-      USA: { laborRate: 28.50, secMachineRate: 10.0, secOpsMin: 0.25, ohRate: 0.90, sgaRate: 0.07, marginRate: 0.10, pkg: 0.08, freight: 0.04, duty: 0.00, multiplier: 1.00 },
-      Mexico: { laborRate: 5.80, secMachineRate: 6.5, secOpsMin: 0.30, ohRate: 0.60, sgaRate: 0.06, marginRate: 0.09, pkg: 0.07, freight: 0.08, duty: 0.00, multiplier: 0.615 },
-      China: { laborRate: 7.20, secMachineRate: 5.5, secOpsMin: 0.35, ohRate: 0.65, sgaRate: 0.07, marginRate: 0.08, pkg: 0.06, freight: 0.18, duty: 0.25, multiplier: 0.538 },
-      Indonesia: { laborRate: 2.80, secMachineRate: 4.0, secOpsMin: 0.45, ohRate: 0.45, sgaRate: 0.05, marginRate: 0.08, pkg: 0.06, freight: 0.22, duty: 0.10, multiplier: 0.364 }
+      USA: { laborRate: 28.50, secMachineRate: 10.0, secOpsMin: 0.25, operatorsPerMachine: 1.0, ohRate: 0.90, sgaRate: 0.07, marginRate: 0.10, pkg: 0.08, freight: 0.04, duty: 0.00, multiplier: 1.00, resinPriceFactor: 1.00 },
+      Mexico: { laborRate: 5.80, secMachineRate: 6.5, secOpsMin: 0.30, operatorsPerMachine: 2.0, ohRate: 0.60, sgaRate: 0.06, marginRate: 0.09, pkg: 0.07, freight: 0.08, duty: 0.00, multiplier: 0.615, resinPriceFactor: 0.85 },
+      China: { laborRate: 7.20, secMachineRate: 5.5, secOpsMin: 0.35, operatorsPerMachine: 4.0, ohRate: 0.65, sgaRate: 0.07, marginRate: 0.08, pkg: 0.06, freight: 0.18, duty: 0.25, multiplier: 0.538, resinPriceFactor: 0.60 },
+      Indonesia: { laborRate: 2.80, secMachineRate: 4.0, secOpsMin: 0.45, operatorsPerMachine: 5.0, ohRate: 0.45, sgaRate: 0.05, marginRate: 0.08, pkg: 0.06, freight: 0.22, duty: 0.10, multiplier: 0.364, resinPriceFactor: 0.65 }
     };
 
     const TONNAGE_BRACKETS = [
@@ -527,39 +546,61 @@
     const machTotal = machPP + machScrap;
 
     const laborRate = inp.laborRateOverride !== null && inp.laborRateOverride !== undefined ? inp.laborRateOverride : r.laborRate;
-    const directLP = laborRate / partsPerHr;
-    const secLP = laborRate * (r.secOpsMin / 60);
+    const operatorsPerMachine = inp.operatorsPerMachineOverride !== null && inp.operatorsPerMachineOverride !== undefined
+      ? Math.max(0.0001, +inp.operatorsPerMachineOverride)
+      : (r.operatorsPerMachine || 1);
+    const secOpsMin = inp.secOpsMin !== null && inp.secOpsMin !== undefined ? +inp.secOpsMin : r.secOpsMin;
+    const directLP = (laborRate / partsPerHr) / operatorsPerMachine;
+    const secLP = laborRate * (secOpsMin / 60);
     const laborScrap = (directLP + secLP) * inp.scrapRate;
     const laborTotal = directLP + secLP + laborScrap;
 
-    const secMachPP = r.secMachineRate * (r.secOpsMin / 60);
+    const secMachPP = r.secMachineRate * (secOpsMin / 60);
     const ohRate = inp.ohRateOverride !== null && inp.ohRateOverride !== undefined ? (inp.ohRateOverride / 100) : r.ohRate;
     const ohTotal = (directLP + secLP) * ohRate;
-    const pkgFreight = r.pkg + r.freight;
-    const mfgSubBase = matTotal + machTotal + laborTotal + secMachPP + ohTotal + pkgFreight;
-    const duty = mfgSubBase * r.duty;
-    const sga = mfgSubBase * r.sgaRate;
+    const pkg = r.pkg;
+    const freight = r.freight;
+
+    const manufacturingCost = matTotal + machTotal + laborTotal + secMachPP + ohTotal + pkg;
+    const sgaRate = r.sgaRate;
+    const marginRate = inp.marginRateOverride !== null && inp.marginRateOverride !== undefined ? (inp.marginRateOverride / 100) : r.marginRate;
+    const costWithSga = manufacturingCost * (1 + sgaRate);
+    const supplierPrice = costWithSga * (1 + marginRate);
+    const sga = costWithSga - manufacturingCost;
+    const profit = supplierPrice - costWithSga;
+
+    const duty = supplierPrice * r.duty;
+    const landedCost = supplierPrice + freight + duty;
+
+    const mode = inp.comparisonMode === 'landed' ? 'landed' : 'exw';
+    const baseTotal = mode === 'landed' ? landedCost : supplierPrice;
+
     results.processingCostPerPart = machPP + directLP + secLP + secMachPP;
     results.scrapCostPerPart = matScrap + machScrap + laborScrap;
     results.overheadCostPerPart = ohTotal;
-
-    const marginRate = inp.marginRateOverride !== null && inp.marginRateOverride !== undefined ? (inp.marginRateOverride / 100) : r.marginRate;
-    const totalBeforeMargin = mfgSubBase + duty + sga;
-    const profit = totalBeforeMargin * marginRate;
-    const baseTotal = totalBeforeMargin + profit;
     results.profit = profit;
+    results._sga = sga;
+    results._duty = duty;
+    results._freight = freight;
+    results._pkg = pkg;
+    results._manufacturingCost = manufacturingCost;
+    results._supplierPrice = supplierPrice;
+    results._landedCost = landedCost;
+    results._comparisonMode = mode;
+    results._operatorsPerMachine = operatorsPerMachine;
+    results._secOpsMin = secOpsMin;
     results._baseTotal = baseTotal;
 
     const toolLifeParts = inp.toolLife * inp.cavities;
     const toolPaidOff = inp.cumulativeVolume >= toolLifeParts;
-    const toolAmortRaw = toolPaidOff ? 0 : inp.toolingCost / toolLifeParts;
+    const toolAmortRaw = toolPaidOff || !toolLifeParts ? 0 : inp.toolingCost / toolLifeParts;
     const toolScrap = toolAmortRaw * inp.scrapRate;
     const toolAmortPP = toolAmortRaw + toolScrap;
     results._toolAmortPP = toolAmortPP;
     results._totalWithTooling = baseTotal + toolAmortPP;
     results._toolPaidOff = toolPaidOff;
     results._toolLifeParts = toolLifeParts;
-    results._toolPctUsed = Math.min((inp.cumulativeVolume / toolLifeParts) * 100, 100);
+    results._toolPctUsed = toolLifeParts > 0 ? Math.min((inp.cumulativeVolume / toolLifeParts) * 100, 100) : 0;
 
     return results;
   }
@@ -608,6 +649,13 @@
       if (el && key !== 'key' && key !== 'resinBlend' && el !== active && el.type !== 'checkbox') {
         el.value = state[key] !== null && state[key] !== undefined ? state[key] : '';
       }
+    });
+
+    // Comparison mode is a radio group keyed by name, not an id. Keep the
+    // checked radio in sync with state.comparisonMode so loaded parts restore
+    // their saved mode.
+    document.querySelectorAll('input[name="comparisonMode"]').forEach(radio => {
+      radio.checked = (radio.value === (state.comparisonMode || 'exw'));
     });
   }
 
@@ -735,7 +783,7 @@
       part: ['partNumber', 'partName', 'region', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate'],
       resin: ['partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'resinCostPerKg'],
       machine: ['tonnage', 'machineRateOverride'],
-      labor: ['laborRateOverride', 'ohRateOverride'],
+      labor: ['laborRateOverride', 'ohRateOverride', 'secOpsMin', 'operatorsPerMachineOverride'],
       margin: ['marginRateOverride'],
       tooling: ['toolingCost', 'toolLife', 'cumulativeVolume']
     };

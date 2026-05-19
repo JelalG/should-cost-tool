@@ -251,6 +251,37 @@
       margin: 6px 0 0;
     }
 
+    .radio-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .radio-option {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 10px;
+      border: 1px solid var(--grey-20);
+      border-radius: var(--radius-sm);
+      background: var(--strike);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--terminal);
+      cursor: pointer;
+      transition: border-color 120ms ease, background 120ms ease;
+    }
+
+    .radio-option:has(input:checked) {
+      border-color: var(--energy);
+      background: var(--green-5);
+    }
+
+    .radio-option input[type="radio"] {
+      accent-color: var(--energy);
+      margin: 0;
+    }
+
     .input-field {
       width: 100%;
       padding: 9px 12px;
