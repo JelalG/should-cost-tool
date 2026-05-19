@@ -330,6 +330,30 @@
       to { transform: rotate(360deg); }
     }
 
+    /* "From the drawing" section — visually distinct from input sections so
+       it's clear these values come from the STEP file, not user judgment. */
+    .drawing-derived .section-header {
+      background: var(--green-5);
+      color: var(--grounded);
+    }
+
+    .drawing-derived .section-header-label::before {
+      background: var(--energy);
+      box-shadow: 0 0 0 3px rgba(0, 130, 50, 0.18);
+    }
+
+    .drawing-derived .section-header-label::after {
+      content: 'CAD';
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--energy);
+      color: var(--strike);
+      margin-left: 4px;
+    }
+
     .radio-group {
       display: flex;
       gap: 8px;

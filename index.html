@@ -65,6 +65,33 @@
       </div>
     </div>
 
+    <div id="drawing-section" class="drawing-derived">
+      <div class="section-header">
+        <span class="section-header-label">From the drawing</span>
+        <button class="reset-btn" onclick="resetSection('drawing')">Reset</button>
+      </div>
+      <div class="section-body">
+        <p class="input-help" style="margin-top: 0;">Auto-filled when you upload a .step. Edit to override.</p>
+        <div class="input-row" style="margin-top: 10px;">
+          <div class="input-group">
+            <label class="input-label">Part Volume (cm³)</label>
+            <input class="input-field" type="number" id="partVolumeCm3" min="0" step="any" inputmode="decimal">
+            <span class="input-help">Solid volume from CAD. With a resin blend selected, Part Weight is derived as volume × density.</span>
+          </div>
+          <div class="input-group">
+            <label class="input-label">Nominal Wall (mm)</label>
+            <input class="input-field" type="number" id="wallThicknessMm" min="0" step="any" inputmode="decimal">
+            <span class="input-help">2 × Volume ÷ Surface Area. Drives cooling time when auto-estimate is on.</span>
+          </div>
+          <div class="input-group">
+            <label class="input-label">Projected Area (cm²)</label>
+            <input class="input-field" type="number" id="projectedAreaCm2" min="0" step="any" inputmode="decimal">
+            <span class="input-help">Minimum silhouette area across the three principal planes. Drives clamp tonnage when auto-estimate is on.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="auto-estimate-section">
       <div class="section-header">
         <span class="section-header-label">Auto-estimate (optional)</span>
@@ -76,29 +103,12 @@
           <span class="toggle-track"><span class="toggle-thumb"></span></span>
           <span class="toggle-label">Auto-fill cavities, cycle time, utilization &amp; tonnage</span>
         </label>
-        <span class="input-help" style="margin-top: 8px;">Provide wall thickness and annual volume to derive the four fields below. Leave off to enter them manually.</span>
+        <span class="input-help" style="margin-top: 8px;">Derives the four process fields below from the drawing values above plus annual volume. Leave off to enter them manually.</span>
         <div class="input-row" style="margin-top: 12px;">
-          <div class="input-group">
-            <label class="input-label">Nominal Wall Thickness (mm)</label>
-            <input class="input-field" type="number" id="wallThicknessMm" min="0" step="any" inputmode="decimal" placeholder="e.g. 2.0">
-            <span class="input-help">Average wall — drives cooling time (cycle ≈ 5 + k × wall², k from selected resin/blend).</span>
-          </div>
           <div class="input-group">
             <label class="input-label">Annual Volume (parts/yr)</label>
-            <input class="input-field" type="number" id="annualVolume" min="0" step="1" inputmode="numeric" placeholder="e.g. 500000">
+            <input class="input-field" type="number" id="annualVolume" min="0" step="1" inputmode="numeric" value="25000">
             <span class="input-help">Yearly demand — drives cavity selection (targets ~4,000 hr/yr per tool).</span>
-          </div>
-        </div>
-        <div class="input-row" style="margin-top: 12px;">
-          <div class="input-group">
-            <label class="input-label">Projected Area (cm²)</label>
-            <input class="input-field" type="number" id="projectedAreaCm2" min="0" step="any" inputmode="decimal" placeholder="e.g. 120">
-            <span class="input-help">Cross-section perpendicular to mold clamp (largest of the bbox face areas, divided by 100 for cm²). Required for flat / high-aspect parts — for those, projArea drives tonnage, not shot weight. Use FreeCAD script to extract.</span>
-          </div>
-          <div class="input-group">
-            <label class="input-label">Clamp Pressure (T/cm²)</label>
-            <input class="input-field" type="number" id="projAreaClampCoeff" min="0" step="any" inputmode="decimal" value="3.0">
-            <span class="input-help">Resin-dependent clamp force per cm² of projected area. 3.0 for glass-filled engineering resins (PBT-GF30, PA66-GF30), 2.0 for unfilled commodity (PP, PE, ABS), 4.0 for high-pressure (PC, PSU).</span>
           </div>
         </div>
       </div>
@@ -219,7 +229,7 @@
             <summary>Advanced: override <var>k</var></summary>
             <div class="input-row" style="margin-top: 10px; margin-bottom: 0;">
               <div class="input-group">
-                <input class="input-field" type="number" id="kOverride" min="0" step="any" inputmode="decimal" placeholder="Leave blank to use derived k">
+                <input class="input-field" type="number" id="kOverride" min="0" step="any" inputmode="decimal">
                 <span class="input-help">Type a measured/quoted k (s/mm²) to bypass the linear-mix math — useful for highly engineered alloys where blending underestimates cooling time.</span>
               </div>
             </div>
@@ -232,25 +242,20 @@
         </div>
         <div class="input-row">
           <div class="input-group">
-            <label class="input-label">Part Volume (cm³)</label>
-            <input class="input-field" type="number" id="partVolumeCm3" min="0" step="any" inputmode="decimal" placeholder="From STEP import">
-            <span class="input-help">Volume from CAD. When set with a resin blend, the calc derives Part Weight = volume × blend density automatically.</span>
-          </div>
-          <div class="input-group">
             <label class="input-label">Part Weight (g)</label>
-            <input class="input-field" type="number" id="partWeightG" min="0" step="any" inputmode="decimal" placeholder="Auto from volume × density">
-            <span class="input-help">Optional explicit weight. Leave blank to derive from Part Volume × resin density. Set explicitly to override.</span>
+            <input class="input-field" type="number" id="partWeightG" min="0" step="any" inputmode="decimal">
+            <span class="input-help">Net weight of one finished part. Computed automatically as Part Volume × resin density once a blend is selected — enter a value here to override.</span>
           </div>
           <div class="input-group">
             <label class="input-label">Runner %</label>
             <input class="input-field" type="number" id="runnerPct" min="0" step="any" inputmode="decimal" value="14">
-            <span class="input-help">Runner/sprue weight as a percent of part weight (e.g. 14 = 14%).</span>
+            <span class="input-help">Runner/sprue weight as a percent of part weight.</span>
           </div>
         </div>
         <div class="input-row">
           <div class="input-group">
             <label class="input-label">Runner Override (g)</label>
-            <input class="input-field" type="number" id="runnerWeightOverride" min="0" step="any" inputmode="decimal" placeholder="Leave blank for auto">
+            <input class="input-field" type="number" id="runnerWeightOverride" min="0" step="any" inputmode="decimal">
             <span class="input-help">Enter a measured runner weight to override the Runner % above.</span>
           </div>
         </div>
@@ -285,7 +290,7 @@
         <div class="input-row">
           <div class="input-group">
             <label class="input-label">Machine Rate Override ($/hr)</label>
-            <input class="input-field" type="number" id="machineRateOverride" min="0" step="any" inputmode="decimal" placeholder="Leave blank for auto">
+            <input class="input-field" type="number" id="machineRateOverride" min="0" step="any" inputmode="decimal">
             <span class="input-help">Type a $/hr rate to override the region + tonnage default.</span>
           </div>
         </div>
@@ -302,7 +307,7 @@
         <div class="input-row">
           <div class="input-group">
             <label class="input-label">Labor Rate Override ($/hr)</label>
-            <input class="input-field" type="number" id="laborRateOverride" min="0" step="any" inputmode="decimal" placeholder="Leave blank for regional default">
+            <input class="input-field" type="number" id="laborRateOverride" min="0" step="any" inputmode="decimal">
             <span class="input-help">Type a $/hr labor rate to override the regional default.</span>
           </div>
         </div>
@@ -310,7 +315,7 @@
         <div class="input-row" style="margin-top: 12px;">
           <div class="input-group">
             <label class="input-label">OH Rate Override %</label>
-            <input class="input-field" type="number" id="ohRateOverride" min="0" step="any" inputmode="decimal" placeholder="Leave blank for regional default">
+            <input class="input-field" type="number" id="ohRateOverride" min="0" step="any" inputmode="decimal">
             <span class="input-help">Overhead as a percent of direct labor (e.g. 90 = 90%).</span>
           </div>
         </div>
@@ -323,7 +328,7 @@
           </div>
           <div class="input-group">
             <label class="input-label">Operators per machine</label>
-            <input class="input-field" type="number" id="operatorsPerMachineOverride" min="0.01" step="any" inputmode="decimal" placeholder="Leave blank for regional default">
+            <input class="input-field" type="number" id="operatorsPerMachineOverride" min="0.01" step="any" inputmode="decimal">
             <span class="input-help">How many machines one operator tends. Blank uses regional default (USA 1, MX 2, CN 4, ID 5). Higher = lower direct labor per part.</span>
           </div>
         </div>
@@ -339,7 +344,7 @@
         <div class="input-row">
           <div class="input-group">
             <label class="input-label">Margin Rate Override %</label>
-            <input class="input-field" type="number" id="marginRateOverride" min="0" step="any" inputmode="decimal" placeholder="Leave blank for regional default">
+            <input class="input-field" type="number" id="marginRateOverride" min="0" step="any" inputmode="decimal">
             <span class="input-help">Contribution margin added on top, as a percent (e.g. 10 = 10%).</span>
           </div>
         </div>

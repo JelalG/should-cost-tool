@@ -532,7 +532,9 @@
 
   // Add event listeners for all inputs
   function attachInputListeners() {
-    const inputs = ['partNumber', 'partName', 'region', 'partVolumeCm3', 'partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'machineRateOverride', 'laborRateOverride', 'ohRateOverride', 'marginRateOverride', 'toolingCost', 'toolLife', 'cumulativeVolume', 'wallThicknessMm', 'annualVolume', 'secOpsMin', 'operatorsPerMachineOverride', 'projectedAreaCm2', 'projAreaClampCoeff'];
+    // projAreaClampCoeff intentionally absent — UI no longer exposes it; the calc
+    // uses the AUTO_CLAMP_T_PER_CM2 constant (3.0) for everyone.
+    const inputs = ['partNumber', 'partName', 'region', 'partVolumeCm3', 'partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'machineRateOverride', 'laborRateOverride', 'ohRateOverride', 'marginRateOverride', 'toolingCost', 'toolLife', 'cumulativeVolume', 'wallThicknessMm', 'annualVolume', 'secOpsMin', 'operatorsPerMachineOverride', 'projectedAreaCm2'];
 
     inputs.forEach(id => {
       const el = document.getElementById(id);
@@ -853,9 +855,10 @@
   // The 'auto' reset also flips autoEstimate off so the four target fields unlock.
   function resetSection(section) {
     const resetMap = {
-      auto: ['wallThicknessMm', 'annualVolume', 'projectedAreaCm2', 'projAreaClampCoeff'],
+      drawing: ['partVolumeCm3', 'wallThicknessMm', 'projectedAreaCm2'],
+      auto: ['annualVolume'],
       part: ['partNumber', 'partName', 'region', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate'],
-      resin: ['partVolumeCm3', 'partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'resinCostPerKg'],
+      resin: ['partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'resinCostPerKg'],
       machine: ['tonnage', 'machineRateOverride'],
       labor: ['laborRateOverride', 'ohRateOverride', 'secOpsMin', 'operatorsPerMachineOverride'],
       margin: ['marginRateOverride'],
