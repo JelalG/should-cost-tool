@@ -104,9 +104,10 @@
           <span class="toggle-label">Auto-fill cavities, cycle time, utilization &amp; tonnage</span>
         </label>
         <span class="input-help" style="margin-top: 8px;">Fills cavities, cycle, utilization &amp; tonnage <strong>only when</strong> the drawing values (volume, wall, projected area), a resin blend, runner %, and annual volume are all set.<br>
-        • <strong>Cycle</strong> = wall overhead (14 / 11 / 9s for wall &lt;1.8 / &lt;3.5 / ≥3.5mm) + shot-mass bonus (0-18s for &lt;50g … &gt;2000g shots — big presses move slower) + k × wall² cooling (Rosato §6).<br>
-        • <strong>Cavities</strong> = max(throughput need, size-min, volume-min), capped by size-max — small parts under 50g get min 2 cav for tool ROI; large parts over 200g are capped at 2 cav by platen size.<br>
-        • <strong>Tonnage</strong> = max(shot wt × 1.0 T/g, projected area × cavities × 0.85 T/cm²). Brackets cover 50T-5000T; rates per Plastics News surveys (e.g. China 400T ≈ $57/hr, 3000T ≈ $191/hr).</span>
+        • <strong>Cycle</strong> = wall overhead (14 / 11 / 9s for wall &lt;1.8 / &lt;3.5 / ≥3.5mm) + shot-mass bonus (0-18s by total shot weight) + k × wall² cooling. Source: Rosato §6.<br>
+        • <strong>Cavities</strong> = clamp(max(throughput_need, size_min, volume_min), 1, size_max). Sources: SPE Plastics Engineering, Boothroyd-Dewhurst DFMA.<br>
+        • <strong>Tonnage</strong> = max(shotG × 1.0, silhouette × cav × 0.85 T/cm²) × 1.15 safety. Uses face-projected silhouette (the actual plastic cross-section accounting for holes / hollows), not the bbox face — critical for hollow parts where bbox over-counts by 2-5×. Sources: Rosato §7.4, Plastics Tech "Sizing the Press".<br>
+        • Override any field below if the supplier's quote tells you their actual cavity / tonnage / cycle.</span>
         <div class="input-row" style="margin-top: 12px;">
           <div class="input-group">
             <label class="input-label">Annual Volume (parts/yr)</label>

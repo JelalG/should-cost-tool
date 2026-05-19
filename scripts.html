@@ -262,16 +262,19 @@
     const shotBonus = cycleBonusByShot(shotG);
     const cycleTimeSec = +(wallOverhead + shotBonus + coolingS).toFixed(1);
 
-    // 4. Tonnage = max of two independent clamp force requirements.
-    //    - Shot-weight: shotG × 1.0 T/g (conservative lower bound)
-    //    - Projected-area: total_area_cm² × pressure_factor (T/cm²)
-    //    The projected area in state is bbox-max (largest bbox face), which
-    //    is the realistic worst-case parting orientation for plate-like
-    //    parts. Pressure factor 0.85 T/cm² fits PBT-GF30 / PA66-GF30 /
-    //    similar GF-filled engineering resins (Rosato §7.4).
+    // 4. Tonnage = max of two clamp requirements, × industry safety factor.
+    //    - Shot-weight bound: shotG × 1.0 T/g (conservative lower bound)
+    //    - Projected-area:    silhouette_cm² × cav × 0.85 T/cm² (GF-filled)
+    //    Projected area is the face-projected silhouette from the STEP — the
+    //    ACTUAL plastic cross-section accounting for hollows / through-holes,
+    //    not the bbox face. (Bbox-max over-counts by 2-5× for hollow parts.)
+    //    Pressure factor 0.85 T/cm² fits PBT-GF30 / PA66-GF30 / similar
+    //    GF-filled engineering resins (Rosato §7.4: 5-8 T/in² = 0.78-1.24).
+    //    Safety factor 1.15: real molders pick 10-20% above theoretical min
+    //    (Plastics Tech "Sizing the Press").
     const tonByShot = shotG * AUTO_CLAMP_T_PER_G;
     const tonByArea = projArea * cavities * AUTO_CLAMP_T_PER_CM2;
-    const tonRaw = Math.max(tonByShot, tonByArea);
+    const tonRaw = Math.max(tonByShot, tonByArea) * 1.15;
     const tonnage = TONNAGE_STEPS.find(t => t >= tonRaw) || TONNAGE_STEPS[TONNAGE_STEPS.length - 1];
 
     return { utilization, cycleTimeSec, cavities, tonnage };
@@ -1537,11 +1540,17 @@
     }
 
     const volMM3 = Math.abs(signedVolMM3);
-    // Face-projected silhouette (smaller, accounts for holes)
+    // Face-projected silhouette via Σ|cross_axis|/4 across triangles. For
+    // closed meshes this gives the TRUE silhouette area accounting for
+    // through-holes and hollow interiors — the actual plastic cross-section
+    // on the parting plane, not the bbox face.
     const faceXY_cm2 = projAccumZ / 4 / 100;
     const faceXZ_cm2 = projAccumY / 4 / 100;
     const faceYZ_cm2 = projAccumX / 4 / 100;
-    // Bbox face areas (larger, what molders use for clamp)
+    const faceMaxCm2 = Math.max(faceXY_cm2, faceXZ_cm2, faceYZ_cm2);
+    // Bbox face areas — kept for diagnostic comparison only. NOT used for
+    // tonnage because for hollow parts (lids, shells, frames) the bbox face
+    // is 2-5× larger than the actual plastic silhouette.
     const bbox_x = maxX - minX, bbox_y = maxY - minY, bbox_z = maxZ - minZ;
     const bboxXY_cm2 = (bbox_x * bbox_y) / 100;
     const bboxXZ_cm2 = (bbox_x * bbox_z) / 100;
@@ -1549,6 +1558,7 @@
     const bboxMaxCm2 = Math.max(bboxXY_cm2, bboxXZ_cm2, bboxYZ_cm2);
     const bboxVolMM3 = bbox_x * bbox_y * bbox_z;
     const nominalWallMm = areaMM2 > 0 ? (2 * volMM3 / areaMM2) : 0;
+    const hollowness = bboxVolMM3 > 0 ? (volMM3 / bboxVolMM3) : 0;
 
     return {
       meshCount,
@@ -1558,11 +1568,12 @@
       signed_volume_mm3: signedVolMM3,
       area_mm2: areaMM2,
       bbox: { x: bbox_x, y: bbox_y, z: bbox_z, volume_mm3: bboxVolMM3 },
-      hollowness: bboxVolMM3 > 0 ? (volMM3 / bboxVolMM3) : 0,
-      projected_cm2: bboxMaxCm2,
+      hollowness: hollowness,
+      // Face-projected silhouette (accounts for holes) — drives tonnage.
+      projected_cm2: faceMaxCm2,
       _projected_detail: {
         bbox: { XY: bboxXY_cm2, XZ: bboxXZ_cm2, YZ: bboxYZ_cm2, max: bboxMaxCm2 },
-        face: { XY: faceXY_cm2, XZ: faceXZ_cm2, YZ: faceYZ_cm2 }
+        face: { XY: faceXY_cm2, XZ: faceXZ_cm2, YZ: faceYZ_cm2, max: faceMaxCm2 }
       },
       nominal_wall_mm: nominalWallMm
     };
@@ -1669,19 +1680,28 @@
 
     const payload = buildPayloadFromStepGeometry(geom);
     applyImportedPayload(payload);
-    // Compact, cross-checkable summary: every number a user might want to
-    // verify against FreeCAD / their CAD tool's mass properties dialog.
+    // Compact, cross-checkable summary. Shows BOTH bbox-max and face-projected
+    // so the user can see why we chose face-projected (real silhouette) for
+    // tonnage instead of the over-counted bbox face for hollow parts.
     const bb = geom.bbox;
+    const d = geom._projected_detail;
+    const hollowPct = (geom.hollowness * 100).toFixed(1);
+    let complexity;
+    if (geom.hollowness > 0.50)      complexity = 'SOLID';
+    else if (geom.hollowness > 0.20) complexity = 'STANDARD';
+    else if (geom.hollowness > 0.05) complexity = 'COMPLEX (ribbed/structural)';
+    else                             complexity = 'HOLLOW SHELL (lid/enclosure)';
     setImportStatus(
-      'Parsed ' + file.name + ' — verify these against your CAD:\n' +
-      '• Bounding box: ' + bb.x.toFixed(2) + ' × ' + bb.y.toFixed(2) + ' × ' + bb.z.toFixed(2) + ' mm\n' +
-      '• Volume: ' + payload.partVolumeCm3 + ' cm³  (' + geom.volume_mm3.toFixed(1) + ' mm³)\n' +
+      'Parsed ' + file.name + ' — verify against your CAD:\n' +
+      '• Bounding box: ' + bb.x.toFixed(1) + ' × ' + bb.y.toFixed(1) + ' × ' + bb.z.toFixed(1) + ' mm\n' +
+      '• Volume: ' + payload.partVolumeCm3 + ' cm³ (' + geom.volume_mm3.toFixed(0) + ' mm³)\n' +
       '• Surface area: ' + geom.area_mm2.toFixed(0) + ' mm²\n' +
       '• Nominal wall (2V/A): ' + payload.wallThicknessMm + ' mm\n' +
-      '• Projected area (bbox-max): ' + payload.projectedAreaCm2 + ' cm²\n' +
-      '• Hollowness: ' + (geom.hollowness * 100).toFixed(1) + '%  (solid volume ÷ bbox volume)\n' +
-      '• Mesh: ' + geom.triCount.toLocaleString() + ' triangles across ' + geom.meshCount + ' ' + (geom.meshCount === 1 ? 'body' : 'bodies') + '\n' +
-      'Now pick the resin & fill in region/volume.',
+      '• Hollowness: ' + hollowPct + '% → ' + complexity + '\n' +
+      '• Projected silhouette (cm²): XY=' + d.face.XY.toFixed(0) + ', XZ=' + d.face.XZ.toFixed(0) + ', YZ=' + d.face.YZ.toFixed(0) + ' → using MAX = ' + payload.projectedAreaCm2 + '\n' +
+      '   (bbox-max would be ' + d.bbox.max.toFixed(0) + ' cm² — that over-counts for hollow parts)\n' +
+      '• Mesh: ' + geom.triCount.toLocaleString() + ' triangles, ' + geom.meshCount + ' ' + (geom.meshCount === 1 ? 'body' : 'bodies') + '\n' +
+      'Now pick the resin & fill in region / annual volume.',
       'success'
     );
   }
