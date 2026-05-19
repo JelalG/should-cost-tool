@@ -297,6 +297,39 @@
       color: var(--terminal);
     }
 
+    .import-status {
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      background: var(--green-5);
+      color: var(--terminal);
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.4;
+      border: 1px solid var(--grey-20);
+    }
+
+    .import-status.error {
+      background: rgba(255, 84, 51, 0.08);
+      border-color: rgba(255, 84, 51, 0.3);
+      color: #b8421f;
+    }
+
+    .import-status .progress {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border: 2px solid var(--grey-20);
+      border-top-color: var(--energy);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
     .radio-group {
       display: flex;
       gap: 8px;

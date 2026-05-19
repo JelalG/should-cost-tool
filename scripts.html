@@ -1273,20 +1273,233 @@
     showToast('Imported ' + applied + ' fields for ' + label);
   }
 
+  // ============================================================================
+  // STEP file parsing (in-browser via occt-import-js / OpenCascade WASM)
+  // ============================================================================
+
+  // Pinned to a specific version so the SRI hash stays valid. To upgrade, run:
+  //   curl -sL https://cdn.jsdelivr.net/npm/occt-import-js@<ver>/dist/occt-import-js.js | openssl dgst -sha384 -binary | openssl base64 -A
+  // and update OCCT_JS_URL + OCCT_JS_SRI together.
+  const OCCT_JS_URL = 'https://cdn.jsdelivr.net/npm/occt-import-js@0.0.22/dist/occt-import-js.js';
+  const OCCT_JS_SRI = 'sha384-D09rZmw+e2oaqc2DV1M8zymgctW7c8vSC3q3Mpd8TY05uTOCuyciSdbkYHtmK3KZ';
+  let _occtInstance = null;
+  let _occtLoadingPromise = null;
+
+  // Lazy-load the OpenCascade WASM module. STEP files never leave the browser;
+  // jsdelivr only serves the library bytes once (then cached by the browser).
+  async function loadOcct() {
+    if (_occtInstance) return _occtInstance;
+    if (_occtLoadingPromise) return _occtLoadingPromise;
+    _occtLoadingPromise = (async () => {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = OCCT_JS_URL;
+        s.integrity = OCCT_JS_SRI;
+        s.crossOrigin = 'anonymous';
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('Failed to load STEP parser (CDN unreachable or blocked)'));
+        document.head.appendChild(s);
+      });
+      if (typeof window.occtimportjs !== 'function') {
+        throw new Error('STEP parser loaded but global occtimportjs not found');
+      }
+      _occtInstance = await window.occtimportjs();
+      return _occtInstance;
+    })();
+    return _occtLoadingPromise;
+  }
+
+  // Compute volume, surface area, bounding box, and projected areas from the
+  // tessellated meshes returned by occt-import-js. Math matches the FreeCAD
+  // script's outputs (see .claude/freecad_should_cost.py) so the two paths
+  // produce equivalent numbers.
+  function computeGeometryFromMeshes(meshes) {
+    let volMM3 = 0;
+    let areaMM2 = 0;
+    // For projected silhouette: sum |n_axis| across triangles, then divide by 4
+    // (each triangle's projected area is |n_axis|/2, and sum counts both sides
+    // of the silhouette).
+    let projAccumX = 0, projAccumY = 0, projAccumZ = 0;
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    let minZ = Infinity, maxZ = -Infinity;
+
+    for (const mesh of meshes) {
+      const verts = mesh.attributes && mesh.attributes.position && mesh.attributes.position.array;
+      const idx = mesh.index && mesh.index.array;
+      if (!verts || !idx) continue;
+
+      // Bounding box from vertices
+      for (let i = 0; i < verts.length; i += 3) {
+        const x = verts[i], y = verts[i + 1], z = verts[i + 2];
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+        if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+      }
+
+      // Per-triangle accumulators
+      for (let t = 0; t < idx.length; t += 3) {
+        const ia = idx[t] * 3, ib = idx[t + 1] * 3, ic = idx[t + 2] * 3;
+        const ax = verts[ia], ay = verts[ia + 1], az = verts[ia + 2];
+        const bx = verts[ib], by = verts[ib + 1], bz = verts[ib + 2];
+        const cx = verts[ic], cy = verts[ic + 1], cz = verts[ic + 2];
+
+        // Signed tetrahedron volume from origin → sums to total solid volume.
+        volMM3 += (ax * (by * cz - bz * cy)
+                 + ay * (bz * cx - bx * cz)
+                 + az * (bx * cy - by * cx)) / 6;
+
+        // Edge vectors AB and AC, cross product = 2 × normal vector
+        const e1x = bx - ax, e1y = by - ay, e1z = bz - az;
+        const e2x = cx - ax, e2y = cy - ay, e2z = cz - az;
+        const nx = e1y * e2z - e1z * e2y;
+        const ny = e1z * e2x - e1x * e2z;
+        const nz = e1x * e2y - e1y * e2x;
+        const nLen = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        areaMM2 += nLen / 2;
+
+        projAccumX += Math.abs(nx);
+        projAccumY += Math.abs(ny);
+        projAccumZ += Math.abs(nz);
+      }
+    }
+
+    volMM3 = Math.abs(volMM3);
+    const projXY_cm2 = projAccumZ / 4 / 100;  // perpendicular-to-Z silhouette
+    const projXZ_cm2 = projAccumY / 4 / 100;
+    const projYZ_cm2 = projAccumX / 4 / 100;
+    const projMinCm2 = Math.min(projXY_cm2, projXZ_cm2, projYZ_cm2);
+    const nominalWallMm = areaMM2 > 0 ? (2 * volMM3 / areaMM2) : 0;
+
+    return {
+      volume_mm3: volMM3,
+      area_mm2: areaMM2,
+      bbox: { x: maxX - minX, y: maxY - minY, z: maxZ - minZ },
+      projected: { XY: projXY_cm2, XZ: projXZ_cm2, YZ: projYZ_cm2, min: projMinCm2 },
+      nominal_wall_mm: nominalWallMm
+    };
+  }
+
+  // Build the same payload shape the FreeCAD Python script writes, populated
+  // from in-browser geometry instead. Sensible MSA-program defaults applied.
+  function buildPayloadFromStepGeometry(geom, fileName, density) {
+    const baseName = (fileName || '').replace(/\.(step|stp)$/i, '');
+    const mass_g = (geom.volume_mm3 / 1000) * density;
+    return {
+      partNumber: baseName,
+      partName: baseName,
+      region: 'China',
+      comparisonMode: 'exw',
+      partWeightG: Math.round(mass_g * 100) / 100,
+      wallThicknessMm: Math.round(geom.nominal_wall_mm * 100) / 100,
+      projectedAreaCm2: Math.round(geom.projected.min * 10) / 10,
+      resinCostPerKg: 4.50,
+      runnerPct: 14,
+      regrindRate: 0.30,
+      scrapRate: 0.02,
+      annualVolume: 25000,
+      projAreaClampCoeff: 3.0,
+      autoEstimate: true,
+      toolingCost: 0,
+      toolLife: 0,
+      cumulativeVolume: 0,
+      resinBlend: {
+        resins: [{ resinId: 'PBT', weightPct: 100 }],
+        filler: { type: 'glass', pct: 30 },
+        kOverride: null,
+        savedBlendKey: null,
+        name: null
+      }
+    };
+  }
+
+  function setImportStatus(msg, kind) {
+    const el = document.getElementById('import-status');
+    if (!el) return;
+    if (!msg) { el.hidden = true; el.textContent = ''; return; }
+    el.hidden = false;
+    el.className = 'import-status' + (kind === 'error' ? ' error' : '');
+    if (kind === 'progress') {
+      el.innerHTML = '<span class="progress"></span>' + msg;
+    } else {
+      el.textContent = msg;
+    }
+  }
+
+  async function processStepFile(file) {
+    const density = 1.52;  // PBT-GF30 default; user can override in Resin section
+    setImportStatus('Loading STEP parser (first time only)…', 'progress');
+    let occt;
+    try {
+      occt = await loadOcct();
+    } catch (err) {
+      setImportStatus('Parser failed to load: ' + err.message, 'error');
+      return;
+    }
+
+    setImportStatus('Parsing ' + file.name + '…', 'progress');
+    let result;
+    try {
+      const buffer = new Uint8Array(await file.arrayBuffer());
+      result = occt.ReadStepFile(buffer, null);
+    } catch (err) {
+      setImportStatus('STEP read failed: ' + err.message, 'error');
+      return;
+    }
+    if (!result || !result.success) {
+      setImportStatus('STEP parser returned an error (file may be malformed)', 'error');
+      return;
+    }
+    if (!result.meshes || result.meshes.length === 0) {
+      setImportStatus('STEP contained no solid geometry', 'error');
+      return;
+    }
+
+    setImportStatus('Computing geometry…', 'progress');
+    let geom;
+    try {
+      geom = computeGeometryFromMeshes(result.meshes);
+    } catch (err) {
+      setImportStatus('Geometry computation failed: ' + err.message, 'error');
+      return;
+    }
+    if (!(geom.volume_mm3 > 0)) {
+      setImportStatus('Geometry has zero volume — STEP may be open shells, not a solid', 'error');
+      return;
+    }
+
+    const payload = buildPayloadFromStepGeometry(geom, file.name, density);
+    applyImportedPayload(payload);
+    setImportStatus(
+      'Imported ' + file.name + ': '
+      + payload.partWeightG + 'g · '
+      + payload.wallThicknessMm + 'mm wall · '
+      + payload.projectedAreaCm2 + 'cm² proj. Override resin & cavity/tonnage from the quote if known.',
+      'success'
+    );
+  }
+
   function attachImportListeners() {
     const fileEl = document.getElementById('import-file');
     if (fileEl) {
       fileEl.addEventListener('change', async (e) => {
         const file = e.target.files && e.target.files[0];
         if (!file) return;
+        const lower = (file.name || '').toLowerCase();
         try {
-          const text = await file.text();
-          const payload = JSON.parse(text);
-          applyImportedPayload(payload);
+          if (lower.endsWith('.step') || lower.endsWith('.stp')) {
+            await processStepFile(file);
+          } else {
+            // .json (from FreeCAD CLI or hand-edited)
+            const text = await file.text();
+            const payload = JSON.parse(text);
+            applyImportedPayload(payload);
+            setImportStatus('Imported ' + (payload.partName || payload.partNumber || file.name), 'success');
+          }
         } catch (err) {
-          showToast('JSON parse failed: ' + err.message, 'error');
+          setImportStatus('Import failed: ' + err.message, 'error');
         } finally {
-          e.target.value = '';  // allow re-selecting the same file
+          e.target.value = '';
         }
       });
     }
@@ -1296,15 +1509,16 @@
       pasteBtn.addEventListener('click', () => {
         const text = pasteEl.value.trim();
         if (!text) {
-          showToast('Paste JSON first', 'error');
+          setImportStatus('Paste JSON first', 'error');
           return;
         }
         try {
           const payload = JSON.parse(text);
           applyImportedPayload(payload);
           pasteEl.value = '';
+          setImportStatus('Imported pasted JSON', 'success');
         } catch (err) {
-          showToast('JSON parse failed: ' + err.message, 'error');
+          setImportStatus('JSON parse failed: ' + err.message, 'error');
         }
       });
     }
