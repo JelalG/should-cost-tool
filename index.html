@@ -45,6 +45,25 @@
       </div>
     </div>
 
+    <div id="import-section">
+      <div class="section-header">
+        <span class="section-header-label">Import from STEP analysis</span>
+      </div>
+      <div class="section-body">
+        <p class="input-help" style="margin-top: 0;">Run the FreeCAD script once per part, then drop the JSON here. Weight, wall, projected area, region, resin price, and runner % all auto-fill.</p>
+        <pre class="cmd-snippet">freecadcmd .claude\freecad_should_cost.py "part.step" --json --number 002795.00.A --name "Inner Lid"</pre>
+        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+          <label for="import-file" class="secondary import-file-btn">Choose .should_cost.json…</label>
+          <input id="import-file" type="file" accept=".json,application/json" style="display: none;">
+          <details>
+            <summary class="import-paste-toggle">…or paste JSON</summary>
+            <textarea id="import-paste" class="input-field" rows="4" placeholder='{"partWeightG":130.26, "wallThicknessMm":2.5, ...}' style="margin-top: 8px; font-family: monospace; font-size: 11px;"></textarea>
+            <button id="import-paste-btn" class="secondary" style="margin-top: 6px;">Apply pasted JSON</button>
+          </details>
+        </div>
+      </div>
+    </div>
+
     <div id="auto-estimate-section">
       <div class="section-header">
         <span class="section-header-label">Auto-estimate (optional)</span>

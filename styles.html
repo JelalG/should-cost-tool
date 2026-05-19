@@ -251,6 +251,52 @@
       margin: 6px 0 0;
     }
 
+    .cmd-snippet {
+      background: var(--terminal);
+      color: var(--strike);
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      overflow-x: auto;
+      margin: 8px 0 0 0;
+      white-space: pre;
+    }
+
+    .import-file-btn {
+      display: inline-block;
+      padding: 9px 14px;
+      background: var(--energy);
+      color: var(--strike);
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-align: center;
+      cursor: pointer;
+      transition: background 120ms ease;
+    }
+
+    .import-file-btn:hover {
+      filter: brightness(1.05);
+    }
+
+    .import-paste-toggle {
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--grey-60);
+      padding: 6px 0;
+    }
+
+    .import-paste-toggle:hover {
+      color: var(--terminal);
+    }
+
     .radio-group {
       display: flex;
       gap: 8px;

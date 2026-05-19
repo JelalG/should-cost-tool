@@ -1234,11 +1234,88 @@
     setTimeout(() => toast.remove(), 3000);
   }
 
+  // Whitelist of state keys that JSON import is allowed to set. Anything else
+  // in the payload (including the _meta block) is ignored so a malformed or
+  // tampered JSON can't write to fields it shouldn't.
+  const IMPORT_ALLOWED_KEYS = new Set([
+    'partNumber', 'partName', 'region', 'comparisonMode',
+    'partWeightG', 'wallThicknessMm', 'projectedAreaCm2',
+    'resinCostPerKg', 'runnerPct', 'regrindRate', 'scrapRate',
+    'annualVolume', 'projAreaClampCoeff',
+    'autoEstimate', 'toolingCost', 'toolLife', 'cumulativeVolume',
+    'resinBlend',
+    // Allow these in case the script outputs supplier-specific overrides:
+    'cavities', 'cycleTimeSec', 'tonnage', 'utilization',
+    'machineRateOverride', 'laborRateOverride', 'ohRateOverride', 'marginRateOverride',
+    'secOpsMin', 'operatorsPerMachineOverride'
+  ]);
+
+  function applyImportedPayload(payload) {
+    if (!payload || typeof payload !== 'object') {
+      showToast('Invalid JSON — must be an object', 'error');
+      return;
+    }
+    const patch = {};
+    let applied = 0;
+    Object.keys(payload).forEach(key => {
+      if (!IMPORT_ALLOWED_KEYS.has(key)) return;
+      patch[key] = payload[key];
+      applied++;
+    });
+    if (applied === 0) {
+      showToast('No importable fields found in JSON', 'error');
+      return;
+    }
+    // Clear the saved-part key so the import becomes a "new part" until saved.
+    patch.key = null;
+    setState(patch);
+    const label = payload.partName || payload.partNumber || 'part';
+    showToast('Imported ' + applied + ' fields for ' + label);
+  }
+
+  function attachImportListeners() {
+    const fileEl = document.getElementById('import-file');
+    if (fileEl) {
+      fileEl.addEventListener('change', async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        try {
+          const text = await file.text();
+          const payload = JSON.parse(text);
+          applyImportedPayload(payload);
+        } catch (err) {
+          showToast('JSON parse failed: ' + err.message, 'error');
+        } finally {
+          e.target.value = '';  // allow re-selecting the same file
+        }
+      });
+    }
+    const pasteBtn = document.getElementById('import-paste-btn');
+    const pasteEl = document.getElementById('import-paste');
+    if (pasteBtn && pasteEl) {
+      pasteBtn.addEventListener('click', () => {
+        const text = pasteEl.value.trim();
+        if (!text) {
+          showToast('Paste JSON first', 'error');
+          return;
+        }
+        try {
+          const payload = JSON.parse(text);
+          applyImportedPayload(payload);
+          pasteEl.value = '';
+        } catch (err) {
+          showToast('JSON parse failed: ' + err.message, 'error');
+        }
+      });
+    }
+  }
+
   // Initialize on load
   window.addEventListener('DOMContentLoaded', async () => {
     populateResinFamilyOptions();
     attachInputListeners();
     attachBlendListeners();
+    attachImportListeners();
     const searchEl = document.getElementById('parts-search');
     if (searchEl) searchEl.addEventListener('input', renderPartsList);
     document.addEventListener('click', handleAnchorClick);
