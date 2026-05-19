@@ -5,6 +5,9 @@
     partNumber: '',
     partName: '',
     region: '',
+    // Volume from CAD (cm³). When set with a resin blend, the calc derives
+    // partWeightG = volume × density. Explicit partWeightG always wins.
+    partVolumeCm3: null,
     partWeightG: null,
     runnerPct: 14,
     runnerWeightOverride: null,
@@ -52,22 +55,24 @@
   const TONNAGE_STEPS = [50, 100, 200, 400, 700, 1000, 1500];
   const AUTO_FIELDS = ['cavities', 'cycleTimeSec', 'utilization', 'tonnage'];
 
-  // Cooling coefficients k (s/mm²) for common base resins. Cycle time ≈ overhead + k × wall².
+  // Cooling coefficients k (s/mm²) and unfilled density (g/cm³) for common
+  // base resins. Cycle time ≈ overhead + k × wall². Density is used to derive
+  // part mass when the user supplies volume from CAD instead of weight.
   // Sourced from molding handbooks (Rosato, Osswald) and field practice — typical, not authoritative.
   const BASE_RESINS = {
-    ABS:    { k: 2.5, name: 'ABS' },
-    PP:     { k: 2.0, name: 'PP' },
-    PE_HD:  { k: 2.2, name: 'PE (HDPE)' },
-    PS:     { k: 2.3, name: 'PS' },
-    PC:     { k: 3.2, name: 'PC' },
-    PA6:    { k: 2.7, name: 'PA6 (Nylon 6)' },
-    PA66:   { k: 2.6, name: 'PA66 (Nylon 66)' },
-    POM:    { k: 3.0, name: 'POM (Acetal)' },
-    PET:    { k: 2.8, name: 'PET' },
-    PMMA:   { k: 3.5, name: 'PMMA (Acrylic)' },
-    PBT:    { k: 2.6, name: 'PBT' },
-    TPU:    { k: 2.6, name: 'TPU' },
-    TPE:    { k: 2.4, name: 'TPE' }
+    ABS:    { k: 2.5, density: 1.04, name: 'ABS' },
+    PP:     { k: 2.0, density: 0.91, name: 'PP' },
+    PE_HD:  { k: 2.2, density: 0.95, name: 'PE (HDPE)' },
+    PS:     { k: 2.3, density: 1.05, name: 'PS' },
+    PC:     { k: 3.2, density: 1.20, name: 'PC' },
+    PA6:    { k: 2.7, density: 1.13, name: 'PA6 (Nylon 6)' },
+    PA66:   { k: 2.6, density: 1.14, name: 'PA66 (Nylon 66)' },
+    POM:    { k: 3.0, density: 1.41, name: 'POM (Acetal)' },
+    PET:    { k: 2.8, density: 1.38, name: 'PET' },
+    PMMA:   { k: 3.5, density: 1.18, name: 'PMMA (Acrylic)' },
+    PBT:    { k: 2.6, density: 1.31, name: 'PBT' },
+    TPU:    { k: 2.6, density: 1.20, name: 'TPU' },
+    TPE:    { k: 2.4, density: 0.95, name: 'TPE' }
   };
 
   // Filler increments k (slower cooling through the gel layer). Bump is added per 10% loading.
@@ -78,6 +83,50 @@
     mineral: { bumpPer10Pct: 0.10, name: 'Mineral' },
     caco3:   { bumpPer10Pct: 0.08, name: 'CaCO₃' }
   };
+
+  // Filler material densities (g/cm³). Used in computeDensityBlend via the
+  // volumetric rule of mixtures: 1/d_blend = w_resin/d_resin + w_filler/d_filler.
+  // PBT(1.31) + 30wt% glass(2.55) → blend ≈ 1.52, matching RTP 1005 spec.
+  const FILLER_DENSITIES = {
+    none:    0,
+    glass:   2.55,
+    talc:    2.75,
+    mineral: 2.70,
+    caco3:   2.71
+  };
+
+  // Weighted blend density (g/cm³). Weight-averages resin densities, then
+  // applies the volumetric mixture rule with filler. Returns null when the
+  // composition is incomplete.
+  function computeDensityBlend(comp) {
+    if (!comp) return null;
+    const resins = (comp.resins || []).filter(r => r && r.resinId && BASE_RESINS[r.resinId] && r.weightPct > 0);
+    if (resins.length === 0) return null;
+    const total = resins.reduce((s, r) => s + r.weightPct, 0);
+    if (total <= 0) return null;
+    const dResin = resins.reduce((s, r) => s + BASE_RESINS[r.resinId].density * r.weightPct, 0) / total;
+    const f = comp.filler;
+    if (!f || f.type === 'none' || !(f.pct > 0)) return dResin;
+    const dFiller = FILLER_DENSITIES[f.type] || 0;
+    if (dFiller <= 0) return dResin;
+    const wF = f.pct / 100;
+    const wR = 1 - wF;
+    return 1 / (wR / dResin + wF / dFiller);
+  }
+
+  // Effective part weight: explicit partWeightG wins; otherwise derive from
+  // partVolumeCm3 × blend density. Returns null when neither path resolves.
+  function resolvePartWeightG(inp) {
+    const explicit = inp.partWeightG;
+    if (explicit !== null && explicit !== undefined && explicit !== '' && !isNaN(+explicit) && +explicit > 0) {
+      return +explicit;
+    }
+    if (inp.partVolumeCm3 > 0) {
+      const d = computeDensityBlend(inp.resinBlend);
+      if (d > 0) return inp.partVolumeCm3 * d;
+    }
+    return null;
+  }
 
   // Derive the blend's cooling coefficient. Linear weight-fraction mix of base k values
   // plus a filler-type bump. Returns null when composition is incomplete.
@@ -131,7 +180,8 @@
     //  - Projected-area-based: projArea × 3.0 T/cm² (dominates for flat / high-aspect
     //    parts like lids — a 25g armature with 120 cm² projected area really
     //    needs 360T, not 50T)
-    const pw = s.partWeightG, rp = s.runnerPct;
+    const pw = resolvePartWeightG(s);
+    const rp = s.runnerPct;
     if (pw > 0 && rp !== null && rp !== undefined && rp >= 0) {
       const shotG = pw * cavities * (1 + rp / 100);
       const tonByShot = shotG * AUTO_CLAMP_T_PER_G;
@@ -482,7 +532,7 @@
 
   // Add event listeners for all inputs
   function attachInputListeners() {
-    const inputs = ['partNumber', 'partName', 'region', 'partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'machineRateOverride', 'laborRateOverride', 'ohRateOverride', 'marginRateOverride', 'toolingCost', 'toolLife', 'cumulativeVolume', 'wallThicknessMm', 'annualVolume', 'secOpsMin', 'operatorsPerMachineOverride', 'projectedAreaCm2', 'projAreaClampCoeff'];
+    const inputs = ['partNumber', 'partName', 'region', 'partVolumeCm3', 'partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'machineRateOverride', 'laborRateOverride', 'ohRateOverride', 'marginRateOverride', 'toolingCost', 'toolLife', 'cumulativeVolume', 'wallThicknessMm', 'annualVolume', 'secOpsMin', 'operatorsPerMachineOverride', 'projectedAreaCm2', 'projAreaClampCoeff'];
 
     inputs.forEach(id => {
       const el = document.getElementById(id);
@@ -549,8 +599,12 @@
     const machineRate = inp.machineRateOverride !== null && inp.machineRateOverride !== undefined ? inp.machineRateOverride : (bracket.baseUSA * r.multiplier);
     results._machineRate = machineRate;
 
-    const runnerWeightG = inp.runnerWeightOverride !== null && inp.runnerWeightOverride !== undefined ? inp.runnerWeightOverride : (inp.partWeightG * inp.runnerPct / 100);
-    const grossG = inp.partWeightG + (runnerWeightG * (1 - inp.regrindRate));
+    // Resolve part weight: explicit user input wins, else derive from volume × blend density.
+    const effectivePartWeightG = resolvePartWeightG(inp);
+    results._effectivePartWeightG = effectivePartWeightG;
+
+    const runnerWeightG = inp.runnerWeightOverride !== null && inp.runnerWeightOverride !== undefined ? inp.runnerWeightOverride : (effectivePartWeightG * inp.runnerPct / 100);
+    const grossG = effectivePartWeightG + (runnerWeightG * (1 - inp.regrindRate));
     const grossKg = grossG / 1000;
     const resinPP = grossKg * inp.resinCostPerKg;
     const matScrap = resinPP * inp.scrapRate;
@@ -677,9 +731,12 @@
   }
 
   // Fields required for a meaningful calc; if any are blank, outputs show "—".
-  const REQUIRED_FOR_CALC = ['region', 'partWeightG', 'runnerPct', 'regrindRate', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'toolingCost', 'toolLife', 'cumulativeVolume'];
+  // partWeightG is checked separately via resolvePartWeightG so volume+blend
+  // density can substitute for an explicit weight input.
+  const REQUIRED_FOR_CALC = ['region', 'runnerPct', 'regrindRate', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'toolingCost', 'toolLife', 'cumulativeVolume'];
 
   function isCalcReady(s) {
+    if (resolvePartWeightG(s) === null) return false;
     return REQUIRED_FOR_CALC.every(k => {
       const v = s[k];
       if (v === null || v === undefined || v === '') return false;
@@ -798,7 +855,7 @@
     const resetMap = {
       auto: ['wallThicknessMm', 'annualVolume', 'projectedAreaCm2', 'projAreaClampCoeff'],
       part: ['partNumber', 'partName', 'region', 'cavities', 'cycleTimeSec', 'utilization', 'scrapRate'],
-      resin: ['partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'resinCostPerKg'],
+      resin: ['partVolumeCm3', 'partWeightG', 'runnerPct', 'runnerWeightOverride', 'regrindRate', 'resinCostPerKg'],
       machine: ['tonnage', 'machineRateOverride'],
       labor: ['laborRateOverride', 'ohRateOverride', 'secOpsMin', 'operatorsPerMachineOverride'],
       margin: ['marginRateOverride'],
@@ -1239,7 +1296,7 @@
   // tampered JSON can't write to fields it shouldn't.
   const IMPORT_ALLOWED_KEYS = new Set([
     'partNumber', 'partName', 'region', 'comparisonMode',
-    'partWeightG', 'wallThicknessMm', 'projectedAreaCm2',
+    'partVolumeCm3', 'partWeightG', 'wallThicknessMm', 'projectedAreaCm2',
     'resinCostPerKg', 'runnerPct', 'regrindRate', 'scrapRate',
     'annualVolume', 'projAreaClampCoeff',
     'autoEstimate', 'toolingCost', 'toolLife', 'cumulativeVolume',
@@ -1380,36 +1437,16 @@
     };
   }
 
-  // Build the same payload shape the FreeCAD Python script writes, populated
-  // from in-browser geometry instead. Sensible MSA-program defaults applied.
-  function buildPayloadFromStepGeometry(geom, fileName, density) {
-    const baseName = (fileName || '').replace(/\.(step|stp)$/i, '');
-    const mass_g = (geom.volume_mm3 / 1000) * density;
+  // Build a payload from STEP geometry ONLY. Returns purely drawing-derived
+  // values — volume (cm³), nominal wall thickness (mm), and minimum projected
+  // area (cm²). Nothing material-dependent (no mass, no resin), nothing
+  // business-dependent (no region, no annual volume), and no filename guesses
+  // for part number/name. The user fills those in themselves.
+  function buildPayloadFromStepGeometry(geom) {
     return {
-      partNumber: baseName,
-      partName: baseName,
-      region: 'China',
-      comparisonMode: 'exw',
-      partWeightG: Math.round(mass_g * 100) / 100,
+      partVolumeCm3: Math.round((geom.volume_mm3 / 1000) * 100) / 100,
       wallThicknessMm: Math.round(geom.nominal_wall_mm * 100) / 100,
-      projectedAreaCm2: Math.round(geom.projected.min * 10) / 10,
-      resinCostPerKg: 4.50,
-      runnerPct: 14,
-      regrindRate: 0.30,
-      scrapRate: 0.02,
-      annualVolume: 25000,
-      projAreaClampCoeff: 3.0,
-      autoEstimate: true,
-      toolingCost: 0,
-      toolLife: 0,
-      cumulativeVolume: 0,
-      resinBlend: {
-        resins: [{ resinId: 'PBT', weightPct: 100 }],
-        filler: { type: 'glass', pct: 30 },
-        kOverride: null,
-        savedBlendKey: null,
-        name: null
-      }
+      projectedAreaCm2: Math.round(geom.projected.min * 10) / 10
     };
   }
 
@@ -1427,7 +1464,6 @@
   }
 
   async function processStepFile(file) {
-    const density = 1.52;  // PBT-GF30 default; user can override in Resin section
     setImportStatus('Loading STEP parser (first time only)…', 'progress');
     let occt;
     try {
@@ -1468,13 +1504,13 @@
       return;
     }
 
-    const payload = buildPayloadFromStepGeometry(geom, file.name, density);
+    const payload = buildPayloadFromStepGeometry(geom);
     applyImportedPayload(payload);
     setImportStatus(
       'Imported ' + file.name + ': '
-      + payload.partWeightG + 'g · '
-      + payload.wallThicknessMm + 'mm wall · '
-      + payload.projectedAreaCm2 + 'cm² proj. Override resin & cavity/tonnage from the quote if known.',
+      + payload.partVolumeCm3 + ' cm³ · '
+      + payload.wallThicknessMm + ' mm wall · '
+      + payload.projectedAreaCm2 + ' cm² projected area. Now pick the resin & fill in the rest.',
       'success'
     );
   }

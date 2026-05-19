@@ -50,7 +50,7 @@
         <span class="section-header-label">Import from STEP</span>
       </div>
       <div class="section-body">
-        <p class="input-help" style="margin-top: 0;">Drop a .step / .stp file and the tool auto-fills weight, wall, projected area, region, resin price, runner %, and turns on auto-estimate. Parser runs entirely in your browser; STEP files never leave your machine.</p>
+        <p class="input-help" style="margin-top: 0;">Drop a .step / .stp file and the tool fills in <strong>only the drawing-derived values</strong> — Part Volume, Nominal Wall, Projected Area. Mass, resin, region, runner %, annual volume, etc. are your call. Parser runs entirely in your browser; STEP files never leave your machine.</p>
         <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
           <label for="import-file" class="secondary import-file-btn">Choose .step file…</label>
           <input id="import-file" type="file" accept=".step,.stp,.json,application/json" style="display: none;">
@@ -232,9 +232,14 @@
         </div>
         <div class="input-row">
           <div class="input-group">
+            <label class="input-label">Part Volume (cm³)</label>
+            <input class="input-field" type="number" id="partVolumeCm3" min="0" step="any" inputmode="decimal" placeholder="From STEP import">
+            <span class="input-help">Volume from CAD. When set with a resin blend, the calc derives Part Weight = volume × blend density automatically.</span>
+          </div>
+          <div class="input-group">
             <label class="input-label">Part Weight (g)</label>
-            <input class="input-field" type="number" id="partWeightG" min="0" step="any" inputmode="decimal" value="85">
-            <span class="input-help">Net weight of one finished part, in grams.</span>
+            <input class="input-field" type="number" id="partWeightG" min="0" step="any" inputmode="decimal" placeholder="Auto from volume × density">
+            <span class="input-help">Optional explicit weight. Leave blank to derive from Part Volume × resin density. Set explicitly to override.</span>
           </div>
           <div class="input-group">
             <label class="input-label">Runner %</label>

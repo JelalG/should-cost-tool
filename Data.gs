@@ -79,6 +79,11 @@ const DEFAULTS = {
   partNumber: 'PN-0001',
   partName: 'Sample Part',
   region: 'Mexico',
+  // Part volume from CAD (cm³). When set and a resin blend is selected, the
+  // calc derives partWeightG = partVolumeCm3 × blend_density. An explicit
+  // partWeightG always wins. STEP import sets only partVolumeCm3 and never
+  // partWeightG, because mass requires a resin assumption.
+  partVolumeCm3: null,
   partWeightG: 85,
   runnerPct: 14,
   runnerWeightOverride: null,
@@ -119,7 +124,7 @@ const DEFAULTS = {
 };
 
 const FIELD_KEYS = [
-  'key', 'partNumber', 'partName', 'region', 'partWeightG', 'runnerPct',
+  'key', 'partNumber', 'partName', 'region', 'partVolumeCm3', 'partWeightG', 'runnerPct',
   'runnerWeightOverride', 'regrindRate', 'cavities', 'cycleTimeSec',
   'utilization', 'scrapRate', 'resinCostPerKg', 'tonnage', 'machineRateOverride',
   'laborRateOverride', 'ohRateOverride', 'marginRateOverride', 'toolingCost',

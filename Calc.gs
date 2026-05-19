@@ -1,3 +1,47 @@
+// Resin densities (g/cm³) — server-side mirror of BASE_RESINS in scripts.html.
+// Used by resolvePartWeightG_ to derive mass when partWeightG is blank but
+// partVolumeCm3 + a resin blend are present.
+var BASE_RESINS_DENSITY = {
+  ABS: 1.04, PP: 0.91, PE_HD: 0.95, PS: 1.05, PC: 1.20,
+  PA6: 1.13, PA66: 1.14, POM: 1.41, PET: 1.38, PMMA: 1.18,
+  PBT: 1.31, TPU: 1.20, TPE: 0.95
+};
+var FILLER_DENSITY = {
+  none: 0, glass: 2.55, talc: 2.75, mineral: 2.70, caco3: 2.71
+};
+
+function computeDensityBlend_(comp) {
+  if (!comp) return null;
+  var resins = (comp.resins || []).filter(function(r) {
+    return r && r.resinId && BASE_RESINS_DENSITY[r.resinId] && r.weightPct > 0;
+  });
+  if (resins.length === 0) return null;
+  var total = resins.reduce(function(s, r) { return s + r.weightPct; }, 0);
+  if (total <= 0) return null;
+  var dResin = resins.reduce(function(s, r) {
+    return s + BASE_RESINS_DENSITY[r.resinId] * r.weightPct;
+  }, 0) / total;
+  var f = comp.filler;
+  if (!f || f.type === 'none' || !(f.pct > 0)) return dResin;
+  var dFiller = FILLER_DENSITY[f.type] || 0;
+  if (dFiller <= 0) return dResin;
+  var wF = f.pct / 100;
+  var wR = 1 - wF;
+  return 1 / (wR / dResin + wF / dFiller);
+}
+
+function resolvePartWeightG_(inp) {
+  var explicit = inp.partWeightG;
+  if (explicit !== null && explicit !== undefined && explicit !== '' && !isNaN(+explicit) && +explicit > 0) {
+    return +explicit;
+  }
+  if (inp.partVolumeCm3 > 0) {
+    var d = computeDensityBlend_(inp.resinBlend);
+    if (d > 0) return inp.partVolumeCm3 * d;
+  }
+  return null;
+}
+
 // Cost model calculation engine - pure functions, no Spreadsheet/DOM calls.
 //
 // Stacking (post-2026-05 model):
@@ -21,11 +65,15 @@ function calcSC(inp) {
     : (bracket.baseUSA * r.multiplier);
   results._machineRate = machineRate;
 
+  // Resolve part weight: explicit input wins, else derive from CAD volume × blend density.
+  const effectivePartWeightG = resolvePartWeightG_(inp);
+  results._effectivePartWeightG = effectivePartWeightG;
+
   // Step 2: Material cost
   const runnerWeightG = inp.runnerWeightOverride !== null && inp.runnerWeightOverride !== undefined
     ? inp.runnerWeightOverride
-    : (inp.partWeightG * inp.runnerPct / 100);
-  const grossG = inp.partWeightG + (runnerWeightG * (1 - inp.regrindRate));
+    : (effectivePartWeightG * inp.runnerPct / 100);
+  const grossG = effectivePartWeightG + (runnerWeightG * (1 - inp.regrindRate));
   const grossKg = grossG / 1000;
   const resinPP = grossKg * inp.resinCostPerKg;
   const matScrap = resinPP * inp.scrapRate;
