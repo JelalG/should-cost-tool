@@ -1,0 +1,10 @@
+# Keep Claude's working files and local-only tooling out of Apps Script.
+.claude/**
+node_modules/**
+package.json
+package-lock.json
+*.md
+*.docx
+.git/**
+.gitignore
+.clasp.json
