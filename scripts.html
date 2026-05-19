@@ -49,10 +49,15 @@
   const AUTO_TARGET_HOURS = 4000;       // production hours/yr per tool
   const AUTO_UTILIZATION  = 0.85;       // industry-standard utilization default
   const AUTO_COOLING_K    = 2.5;        // fallback cooling coefficient (s/mm²) when no resin/blend selected
-  // Non-cooling cycle operations: fill (1-2s) + pack/hold (3-5s) + mold open
-  // (2-3s) + ejection (1-2s) + mold close (2-3s) + recovery (1-3s) ≈ 10s.
-  // Source: Rosato, Injection Molding Handbook, 4th ed., Ch. 6.
-  const AUTO_OVERHEAD_S   = 10;
+  // Cycle overhead (non-cooling operations: mold close + fill + pack + open +
+  // eject + recovery) scales with part complexity. Thin walls correlate with
+  // intricate geometry (ribs, bosses, hollows, cooling fins) which add to
+  // mold-motion and ejection time. Source: Rosato Ch.6 + field observation.
+  function cycleOverheadBySize(wallMm) {
+    if (wallMm < 1.8) return 14;   // thin / complex parts (lids, fins, electronics housings, armatures)
+    if (wallMm < 3.5) return 11;   // typical parts (consumer goods, automotive trim)
+    return 9;                       // thick / simple parts (handles, structural)
+  }
   const AUTO_CLAMP_T_PER_G = 1.0;       // shot-weight rule of thumb (lower bound)
   // Projected-area clamp pressure for GF-filled engineering thermoplastics.
   // Sources: Rosato §7.4 (5-8 tons/in² = 0.78-1.24 T/cm²); PMM "Sizing the
@@ -61,7 +66,7 @@
   // resins (PE, PP, PS) actually need less — but we tune for the harder case.
   const AUTO_CLAMP_T_PER_CM2 = 0.85;
   const CAVITY_STEPS = [1, 2, 4, 6, 8, 12, 16, 24, 32, 48, 64];
-  const TONNAGE_STEPS = [50, 100, 200, 400, 700, 1000, 1500];
+  const TONNAGE_STEPS = [50, 80, 100, 150, 200, 300, 400, 500, 700, 1000, 1500];
   const AUTO_FIELDS = ['cavities', 'cycleTimeSec', 'utilization', 'tonnage'];
 
   // Size-based cavity minimum. Single-cavity tools have poor ROI for small
@@ -75,6 +80,20 @@
     if (partWeightG < 20)   return 4;
     if (partWeightG < 50)   return 2;
     return 1;  // >= 50g → single-cavity is economically viable
+  }
+
+  // Maximum cavities by part size. Large parts can't fit in many cavities
+  // because the tool footprint outgrows available press platen sizes (and
+  // shot weight outgrows machine injection capacity). Caps below correspond
+  // roughly to a 1500T-max platen × 50% utilization for cavity layout.
+  function cavityMaxBySize(partWeightG) {
+    if (!(partWeightG > 0)) return 64;
+    if (partWeightG > 500)  return 1;
+    if (partWeightG > 200)  return 2;
+    if (partWeightG > 50)   return 4;
+    if (partWeightG > 20)   return 8;
+    if (partWeightG > 5)    return 16;
+    return 32;
   }
 
   // Cooling coefficients k (s/mm²) and unfilled density (g/cm³) for common
@@ -195,16 +214,22 @@
     if (rp === null || rp === undefined || rp < 0) return null;
 
     // 1. Cycle time = overhead (mold motion + fill + recovery) + cooling.
-    //    Source: Rosato Injection Molding Handbook §6.
+    //    Overhead scales with wall thickness as a complexity proxy:
+    //      <1.5mm → 14s (thin / complex)
+    //      <3.0mm → 11s (typical)
+    //      ≥3.0mm → 9s  (thick / simple)
+    //    Source: Rosato Injection Molding Handbook §6 + field observation.
     const utilization = AUTO_UTILIZATION;
     const k = computeKBlend(s.resinBlend);
     const kEff = (k !== null && k > 0) ? k : AUTO_COOLING_K;
-    const cycleTimeSec = +(AUTO_OVERHEAD_S + kEff * wall * wall).toFixed(1);
+    const overhead = cycleOverheadBySize(wall);
+    const cycleTimeSec = +(overhead + kEff * wall * wall).toFixed(1);
 
-    // 2. Cavities = max of three independent requirements.
+    // 2. Cavities = max of three requirements, bounded by part-size cap.
     //    - Throughput need: annual / (parts_per_hr_per_cav × target_hours)
     //    - Size minimum: small parts default to multi-cavity for tool ROI
     //    - Volume minimum: high-volume parts always justify multi-cavity
+    //    - Size MAXIMUM (new): large parts can't fit many cavities per tool
     const partsPerHrPerCav = (3600 / cycleTimeSec) * utilization;
     const cavByThruput = Math.ceil(annual / (partsPerHrPerCav * AUTO_TARGET_HOURS));
     const cavBySize = cavityMinBySize(partWt);
@@ -214,7 +239,9 @@
     else if (annual >= 100000)  cavByVolume = 4;
     else if (annual >= 50000)   cavByVolume = 2;
     else                        cavByVolume = 1;
-    const cavRaw = Math.max(cavByThruput, cavBySize, cavByVolume);
+    const cavRawMin = Math.max(cavByThruput, cavBySize, cavByVolume);
+    const cavMax = cavityMaxBySize(partWt);
+    const cavRaw = Math.min(cavRawMin, cavMax);
     const cavities = CAVITY_STEPS.find(c => c >= cavRaw) || CAVITY_STEPS[CAVITY_STEPS.length - 1];
 
     // 3. Tonnage = max of two independent clamp force requirements.
@@ -621,15 +648,18 @@
   function calcSC(inp) {
     const REGIONS = {
       USA: { laborRate: 28.50, secMachineRate: 10.0, secOpsMin: 0.25, operatorsPerMachine: 1.0, ohRate: 0.90, sgaRate: 0.07, marginRate: 0.10, pkg: 0.08, freight: 0.04, duty: 0.00, multiplier: 1.00, resinPriceFactor: 1.00 },
-      Mexico: { laborRate: 5.80, secMachineRate: 6.5, secOpsMin: 0.30, operatorsPerMachine: 2.0, ohRate: 0.60, sgaRate: 0.06, marginRate: 0.09, pkg: 0.07, freight: 0.08, duty: 0.00, multiplier: 0.615, resinPriceFactor: 0.85 },
-      China: { laborRate: 7.20, secMachineRate: 5.5, secOpsMin: 0.35, operatorsPerMachine: 4.0, ohRate: 0.65, sgaRate: 0.07, marginRate: 0.08, pkg: 0.06, freight: 0.18, duty: 0.25, multiplier: 0.538, resinPriceFactor: 0.60 },
-      Indonesia: { laborRate: 2.80, secMachineRate: 4.0, secOpsMin: 0.45, operatorsPerMachine: 5.0, ohRate: 0.45, sgaRate: 0.05, marginRate: 0.08, pkg: 0.06, freight: 0.22, duty: 0.10, multiplier: 0.364, resinPriceFactor: 0.65 }
+      Mexico: { laborRate: 5.80, secMachineRate: 6.5, secOpsMin: 0.30, operatorsPerMachine: 2.0, ohRate: 0.60, sgaRate: 0.06, marginRate: 0.09, pkg: 0.07, freight: 0.08, duty: 0.00, multiplier: 0.65, resinPriceFactor: 0.85 },
+      China: { laborRate: 7.20, secMachineRate: 5.5, secOpsMin: 0.35, operatorsPerMachine: 4.0, ohRate: 0.65, sgaRate: 0.07, marginRate: 0.08, pkg: 0.06, freight: 0.18, duty: 0.25, multiplier: 0.58, resinPriceFactor: 0.60 },
+      Indonesia: { laborRate: 2.80, secMachineRate: 4.0, secOpsMin: 0.45, operatorsPerMachine: 5.0, ohRate: 0.45, sgaRate: 0.05, marginRate: 0.08, pkg: 0.06, freight: 0.22, duty: 0.10, multiplier: 0.45, resinPriceFactor: 0.65 }
     };
 
     const TONNAGE_BRACKETS = [
-      { maxTons: 50, baseUSA: 32 }, { maxTons: 100, baseUSA: 42 }, { maxTons: 200, baseUSA: 52 },
-      { maxTons: 400, baseUSA: 68 }, { maxTons: 700, baseUSA: 88 }, { maxTons: 1000, baseUSA: 110 },
-      { maxTons: 9999, baseUSA: 140 }
+      { maxTons: 50,   baseUSA: 45  }, { maxTons: 80,   baseUSA: 52  },
+      { maxTons: 100,  baseUSA: 58  }, { maxTons: 150,  baseUSA: 68  },
+      { maxTons: 200,  baseUSA: 75  }, { maxTons: 300,  baseUSA: 88  },
+      { maxTons: 400,  baseUSA: 98  }, { maxTons: 500,  baseUSA: 110 },
+      { maxTons: 700,  baseUSA: 125 }, { maxTons: 1000, baseUSA: 155 },
+      { maxTons: 1500, baseUSA: 200 }, { maxTons: 9999, baseUSA: 260 }
     ];
 
     const r = REGIONS[inp.region] || REGIONS.Mexico;
@@ -919,14 +949,17 @@
   function resolveDefaultsForSave(s) {
     const REGIONS = {
       USA: { laborRate: 28.50, ohRate: 0.90, marginRate: 0.10, multiplier: 1.00 },
-      Mexico: { laborRate: 5.80, ohRate: 0.60, marginRate: 0.09, multiplier: 0.615 },
-      China: { laborRate: 7.20, ohRate: 0.65, marginRate: 0.08, multiplier: 0.538 },
-      Indonesia: { laborRate: 2.80, ohRate: 0.45, marginRate: 0.08, multiplier: 0.364 }
+      Mexico: { laborRate: 5.80, ohRate: 0.60, marginRate: 0.09, multiplier: 0.65 },
+      China: { laborRate: 7.20, ohRate: 0.65, marginRate: 0.08, multiplier: 0.58 },
+      Indonesia: { laborRate: 2.80, ohRate: 0.45, marginRate: 0.08, multiplier: 0.45 }
     };
     const TONNAGE_BRACKETS = [
-      { maxTons: 50, baseUSA: 32 }, { maxTons: 100, baseUSA: 42 }, { maxTons: 200, baseUSA: 52 },
-      { maxTons: 400, baseUSA: 68 }, { maxTons: 700, baseUSA: 88 }, { maxTons: 1000, baseUSA: 110 },
-      { maxTons: 9999, baseUSA: 140 }
+      { maxTons: 50,   baseUSA: 45  }, { maxTons: 80,   baseUSA: 52  },
+      { maxTons: 100,  baseUSA: 58  }, { maxTons: 150,  baseUSA: 68  },
+      { maxTons: 200,  baseUSA: 75  }, { maxTons: 300,  baseUSA: 88  },
+      { maxTons: 400,  baseUSA: 98  }, { maxTons: 500,  baseUSA: 110 },
+      { maxTons: 700,  baseUSA: 125 }, { maxTons: 1000, baseUSA: 155 },
+      { maxTons: 1500, baseUSA: 200 }, { maxTons: 9999, baseUSA: 260 }
     ];
     const r = REGIONS[s.region] || REGIONS.Mexico;
     const bracket = TONNAGE_BRACKETS.find(b => s.tonnage <= b.maxTons) || TONNAGE_BRACKETS[TONNAGE_BRACKETS.length - 1];

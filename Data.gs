@@ -6,6 +6,12 @@
 // 1 operator tending 3-5 machines, scaling direct labor accordingly.
 // resinPriceFactor scales North American spec-sheet resin prices down to local
 // market prices (Chinese local PBT-GF30 ≈ $2.75/kg vs RTP NA spec $4.50/kg).
+//
+// Multiplier note (2026 recalibration): machine rates aren't a flat multiple
+// of labor cost — capital, energy, and parts are similar globally, only
+// indirect labor and facilities vary regionally. Multipliers below reflect
+// realistic burdened-rate ratios, not labor ratios. Sources: Plastics News
+// hourly rate surveys, Mold-Making Technology cost benchmarks, ManufacturingHQ.
 const REGIONS = {
   USA: {
     laborRate: 28.50,
@@ -32,7 +38,7 @@ const REGIONS = {
     pkg: 0.07,
     freight: 0.08,
     duty: 0.00,
-    multiplier: 0.615,
+    multiplier: 0.65,
     resinPriceFactor: 0.85
   },
   China: {
@@ -46,7 +52,7 @@ const REGIONS = {
     pkg: 0.06,
     freight: 0.18,
     duty: 0.25,
-    multiplier: 0.538,
+    multiplier: 0.58,
     resinPriceFactor: 0.60
   },
   Indonesia: {
@@ -60,19 +66,30 @@ const REGIONS = {
     pkg: 0.06,
     freight: 0.22,
     duty: 0.10,
-    multiplier: 0.364,
+    multiplier: 0.45,
     resinPriceFactor: 0.65
   }
 };
 
+// Machine rate brackets (2026 industry-calibrated). USA base rates reflect
+// burdened hourly machine cost (capital + energy + maintenance + indirect
+// labor + facilities + overhead absorption), per Plastics News surveys and
+// US molder benchmarks. Granular bracket steps (50/80/100/150/200/300/...)
+// match how molders actually buy presses so 230T doesn't get lumped with
+// 400T machines.
 const TONNAGE_BRACKETS = [
-  { maxTons: 50, baseUSA: 32, name: 'Micro' },
-  { maxTons: 100, baseUSA: 42, name: 'Small' },
-  { maxTons: 200, baseUSA: 52, name: 'Medium' },
-  { maxTons: 400, baseUSA: 68, name: 'Large' },
-  { maxTons: 700, baseUSA: 88, name: 'XL' },
-  { maxTons: 1000, baseUSA: 110, name: 'XXL' },
-  { maxTons: 9999, baseUSA: 140, name: 'Giga' }
+  { maxTons: 50,   baseUSA: 45,  name: '≤50T (Micro)' },
+  { maxTons: 80,   baseUSA: 52,  name: '50-80T' },
+  { maxTons: 100,  baseUSA: 58,  name: '80-100T (Small)' },
+  { maxTons: 150,  baseUSA: 68,  name: '100-150T' },
+  { maxTons: 200,  baseUSA: 75,  name: '150-200T (Medium)' },
+  { maxTons: 300,  baseUSA: 88,  name: '200-300T' },
+  { maxTons: 400,  baseUSA: 98,  name: '300-400T (Large)' },
+  { maxTons: 500,  baseUSA: 110, name: '400-500T' },
+  { maxTons: 700,  baseUSA: 125, name: '500-700T (XL)' },
+  { maxTons: 1000, baseUSA: 155, name: '700-1000T (XXL)' },
+  { maxTons: 1500, baseUSA: 200, name: '1000-1500T (Giga)' },
+  { maxTons: 9999, baseUSA: 260, name: '1500T+ (Mega)' }
 ];
 
 const DEFAULTS = {
