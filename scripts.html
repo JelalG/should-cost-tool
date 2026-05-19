@@ -49,14 +49,28 @@
   const AUTO_TARGET_HOURS = 4000;       // production hours/yr per tool
   const AUTO_UTILIZATION  = 0.85;       // industry-standard utilization default
   const AUTO_COOLING_K    = 2.5;        // fallback cooling coefficient (s/mm²) when no resin/blend selected
-  // Cycle overhead (non-cooling operations: mold close + fill + pack + open +
-  // eject + recovery) scales with part complexity. Thin walls correlate with
-  // intricate geometry (ribs, bosses, hollows, cooling fins) which add to
-  // mold-motion and ejection time. Source: Rosato Ch.6 + field observation.
-  function cycleOverheadBySize(wallMm) {
-    if (wallMm < 1.8) return 14;   // thin / complex parts (lids, fins, electronics housings, armatures)
-    if (wallMm < 3.5) return 11;   // typical parts (consumer goods, automotive trim)
-    return 9;                       // thick / simple parts (handles, structural)
+  // Cycle overhead has two components:
+  //   1. Wall-thickness factor — thin walls correlate with intricate geometry
+  //      (ribs, bosses, hollows, cooling fins) which add to mold-motion and
+  //      ejection time.
+  //   2. Part-mass factor — bigger shots take longer to fill, pack, and
+  //      recover. Bigger presses move slower (heavier mold halves). For
+  //      multi-cavity tools the relevant mass is total shot weight, not
+  //      single-part weight.
+  // Source: Rosato Ch.6 + field observation across small-to-mega presses.
+  function cycleOverheadByWall(wallMm) {
+    if (wallMm < 1.8) return 14;   // thin / complex (lids, fins, electronics housings)
+    if (wallMm < 3.5) return 11;   // typical (consumer goods, automotive trim)
+    return 9;                       // thick / simple (handles, structural)
+  }
+  function cycleBonusByShot(shotGramms) {
+    if (!(shotGramms > 0))    return 0;
+    if (shotGramms < 50)      return 0;    // tiny shots fill instantly
+    if (shotGramms < 200)     return 2;    // small parts
+    if (shotGramms < 500)     return 5;    // medium parts
+    if (shotGramms < 1000)    return 8;    // large parts (typical of 700-1500T presses)
+    if (shotGramms < 2000)    return 12;   // very large (1500-3000T)
+    return 18;                              // huge (3000T+ Mega presses)
   }
   const AUTO_CLAMP_T_PER_G = 1.0;       // shot-weight rule of thumb (lower bound)
   // Projected-area clamp pressure for GF-filled engineering thermoplastics.
@@ -66,7 +80,7 @@
   // resins (PE, PP, PS) actually need less — but we tune for the harder case.
   const AUTO_CLAMP_T_PER_CM2 = 0.85;
   const CAVITY_STEPS = [1, 2, 4, 6, 8, 12, 16, 24, 32, 48, 64];
-  const TONNAGE_STEPS = [50, 80, 100, 150, 200, 300, 400, 500, 700, 1000, 1500];
+  const TONNAGE_STEPS = [50, 80, 100, 150, 200, 300, 400, 500, 700, 1000, 1500, 2000, 2500, 3000, 4000, 5000];
   const AUTO_FIELDS = ['cavities', 'cycleTimeSec', 'utilization', 'tonnage'];
 
   // Size-based cavity minimum. Single-cavity tools have poor ROI for small
@@ -213,24 +227,21 @@
     if (!(wall > 0) || !(annual > 0) || !(partWt > 0) || !(projArea > 0)) return null;
     if (rp === null || rp === undefined || rp < 0) return null;
 
-    // 1. Cycle time = overhead (mold motion + fill + recovery) + cooling.
-    //    Overhead scales with wall thickness as a complexity proxy:
-    //      <1.5mm → 14s (thin / complex)
-    //      <3.0mm → 11s (typical)
-    //      ≥3.0mm → 9s  (thick / simple)
-    //    Source: Rosato Injection Molding Handbook §6 + field observation.
+    // 1. First-pass cycle from wall only (cooling-dominated for typical parts).
+    //    We'll refine after we know shot weight (which depends on cavities).
     const utilization = AUTO_UTILIZATION;
     const k = computeKBlend(s.resinBlend);
     const kEff = (k !== null && k > 0) ? k : AUTO_COOLING_K;
-    const overhead = cycleOverheadBySize(wall);
-    const cycleTimeSec = +(overhead + kEff * wall * wall).toFixed(1);
+    const wallOverhead = cycleOverheadByWall(wall);
+    const coolingS = kEff * wall * wall;
+    const firstPassCycle = wallOverhead + coolingS;
 
     // 2. Cavities = max of three requirements, bounded by part-size cap.
     //    - Throughput need: annual / (parts_per_hr_per_cav × target_hours)
     //    - Size minimum: small parts default to multi-cavity for tool ROI
     //    - Volume minimum: high-volume parts always justify multi-cavity
-    //    - Size MAXIMUM (new): large parts can't fit many cavities per tool
-    const partsPerHrPerCav = (3600 / cycleTimeSec) * utilization;
+    //    - Size MAXIMUM: large parts can't fit many cavities per tool
+    const partsPerHrPerCav = (3600 / firstPassCycle) * utilization;
     const cavByThruput = Math.ceil(annual / (partsPerHrPerCav * AUTO_TARGET_HOURS));
     const cavBySize = cavityMinBySize(partWt);
     let cavByVolume;
@@ -244,14 +255,20 @@
     const cavRaw = Math.min(cavRawMin, cavMax);
     const cavities = CAVITY_STEPS.find(c => c >= cavRaw) || CAVITY_STEPS[CAVITY_STEPS.length - 1];
 
-    // 3. Tonnage = max of two independent clamp force requirements.
+    // 3. Refine cycle with shot-weight bonus. Big shots = longer fill + pack +
+    //    recovery; big presses move slower. Adds 0-18s on top of wall-based
+    //    overhead depending on total shot mass.
+    const shotG = partWt * cavities * (1 + rp / 100);
+    const shotBonus = cycleBonusByShot(shotG);
+    const cycleTimeSec = +(wallOverhead + shotBonus + coolingS).toFixed(1);
+
+    // 4. Tonnage = max of two independent clamp force requirements.
     //    - Shot-weight: shotG × 1.0 T/g (conservative lower bound)
     //    - Projected-area: total_area_cm² × pressure_factor (T/cm²)
     //    The projected area in state is bbox-max (largest bbox face), which
     //    is the realistic worst-case parting orientation for plate-like
     //    parts. Pressure factor 0.85 T/cm² fits PBT-GF30 / PA66-GF30 /
     //    similar GF-filled engineering resins (Rosato §7.4).
-    const shotG = partWt * cavities * (1 + rp / 100);
     const tonByShot = shotG * AUTO_CLAMP_T_PER_G;
     const tonByArea = projArea * cavities * AUTO_CLAMP_T_PER_CM2;
     const tonRaw = Math.max(tonByShot, tonByArea);
@@ -659,7 +676,10 @@
       { maxTons: 200,  baseUSA: 75  }, { maxTons: 300,  baseUSA: 88  },
       { maxTons: 400,  baseUSA: 98  }, { maxTons: 500,  baseUSA: 110 },
       { maxTons: 700,  baseUSA: 125 }, { maxTons: 1000, baseUSA: 155 },
-      { maxTons: 1500, baseUSA: 200 }, { maxTons: 9999, baseUSA: 260 }
+      { maxTons: 1500, baseUSA: 200 }, { maxTons: 2000, baseUSA: 245 },
+      { maxTons: 2500, baseUSA: 290 }, { maxTons: 3000, baseUSA: 330 },
+      { maxTons: 4000, baseUSA: 400 }, { maxTons: 5000, baseUSA: 470 },
+      { maxTons: 9999, baseUSA: 560 }
     ];
 
     const r = REGIONS[inp.region] || REGIONS.Mexico;
@@ -959,7 +979,10 @@
       { maxTons: 200,  baseUSA: 75  }, { maxTons: 300,  baseUSA: 88  },
       { maxTons: 400,  baseUSA: 98  }, { maxTons: 500,  baseUSA: 110 },
       { maxTons: 700,  baseUSA: 125 }, { maxTons: 1000, baseUSA: 155 },
-      { maxTons: 1500, baseUSA: 200 }, { maxTons: 9999, baseUSA: 260 }
+      { maxTons: 1500, baseUSA: 200 }, { maxTons: 2000, baseUSA: 245 },
+      { maxTons: 2500, baseUSA: 290 }, { maxTons: 3000, baseUSA: 330 },
+      { maxTons: 4000, baseUSA: 400 }, { maxTons: 5000, baseUSA: 470 },
+      { maxTons: 9999, baseUSA: 560 }
     ];
     const r = REGIONS[s.region] || REGIONS.Mexico;
     const bracket = TONNAGE_BRACKETS.find(b => s.tonnage <= b.maxTons) || TONNAGE_BRACKETS[TONNAGE_BRACKETS.length - 1];

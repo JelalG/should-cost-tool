@@ -89,7 +89,12 @@ const TONNAGE_BRACKETS = [
   { maxTons: 700,  baseUSA: 125, name: '500-700T (XL)' },
   { maxTons: 1000, baseUSA: 155, name: '700-1000T (XXL)' },
   { maxTons: 1500, baseUSA: 200, name: '1000-1500T (Giga)' },
-  { maxTons: 9999, baseUSA: 260, name: '1500T+ (Mega)' }
+  { maxTons: 2000, baseUSA: 245, name: '1500-2000T' },
+  { maxTons: 2500, baseUSA: 290, name: '2000-2500T' },
+  { maxTons: 3000, baseUSA: 330, name: '2500-3000T (Mega)' },
+  { maxTons: 4000, baseUSA: 400, name: '3000-4000T' },
+  { maxTons: 5000, baseUSA: 470, name: '4000-5000T (Ultra)' },
+  { maxTons: 9999, baseUSA: 560, name: '5000T+ (Extreme)' }
 ];
 
 const DEFAULTS = {
