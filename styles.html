@@ -332,6 +332,91 @@
       to { transform: rotate(360deg); }
     }
 
+    /* Editable constants panel */
+    .constants-help {
+      font-size: 12px;
+      color: var(--grey-60);
+      margin: 0 0 12px 0;
+      line-height: 1.5;
+    }
+    .constants-section {
+      margin: 8px 0;
+      border: 1px solid var(--grey-20);
+      border-radius: var(--radius-sm);
+      background: var(--strike);
+    }
+    .constants-section > summary {
+      padding: 10px 14px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--terminal);
+      background: var(--grey-10);
+      border-radius: var(--radius-sm);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .constants-section[open] > summary {
+      border-bottom: 1px solid var(--grey-20);
+      border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    }
+    .constants-section-hint {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: none;
+      color: var(--grey-60);
+    }
+    .constants-section-body {
+      padding: 12px 14px 16px;
+    }
+    .constants-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+    .constants-table thead th {
+      text-align: left;
+      padding: 6px 8px;
+      font-weight: 700;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--grey-60);
+      border-bottom: 1px solid var(--grey-20);
+    }
+    .constants-table tbody td {
+      padding: 4px 8px;
+      border-bottom: 1px solid var(--grey-10);
+      vertical-align: middle;
+    }
+    .constants-table tbody td:first-child {
+      font-weight: 600;
+      color: var(--terminal);
+    }
+    .constants-table input[type="number"] {
+      width: 100%;
+      padding: 4px 6px;
+      border: 1px solid var(--grey-20);
+      border-radius: 3px;
+      font-size: 12px;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      background: var(--strike);
+      color: var(--terminal);
+    }
+    .constants-table input[type="number"].edited {
+      border-color: var(--energy);
+      background: var(--energy-5);
+    }
+    .constants-row-label {
+      font-size: 12px;
+      color: var(--terminal);
+    }
+
     /* "From the drawing" section — visually distinct from input sections so
        it's clear these values come from the STEP file, not user judgment. */
     .drawing-derived .section-header {

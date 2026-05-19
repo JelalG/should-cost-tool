@@ -723,6 +723,60 @@
 
       </div>
     </details>
+
+    <details class="methodology" id="editable-constants-panel">
+      <summary>Editable constants</summary>
+      <div class="methodology-body">
+        <p class="constants-help">Every constant the calc uses, editable in one place. Changes save to your browser (localStorage) and persist across refreshes. Server-side export uses the original defaults — these edits affect on-screen calcs only.<br><br>
+        <button class="reset-btn" onclick="resetConstantsCategory('all')">Reset all to defaults</button></p>
+
+        <details class="constants-section" open>
+          <summary>Regional constants <span class="constants-section-hint">labor, OH, margin, freight, duty, …</span></summary>
+          <div class="constants-section-body">
+            <p class="input-help">Per-region cost defaults. <code>multiplier</code> scales the machine rate bracket; <code>resinPriceFactor</code> scales NA spec-sheet resin prices to local market.
+            <button class="reset-btn" onclick="resetConstantsCategory('regions')">Reset regions</button></p>
+            <div id="constants-regions"></div>
+          </div>
+        </details>
+
+        <details class="constants-section">
+          <summary>Machine rate brackets <span class="constants-section-hint">USA $/hr by tonnage</span></summary>
+          <div class="constants-section-body">
+            <p class="input-help">Base USA hourly burdened machine rate per tonnage bracket. Regional multiplier (above) scales these. Tonnage value is the bracket ceiling (e.g. 200T row = 150T–200T machines).
+            <button class="reset-btn" onclick="resetConstantsCategory('tonnage')">Reset brackets</button></p>
+            <div id="constants-tonnage"></div>
+          </div>
+        </details>
+
+        <details class="constants-section">
+          <summary>Resin database <span class="constants-section-hint">cooling k, density</span></summary>
+          <div class="constants-section-body">
+            <p class="input-help">Per-resin cooling coefficient <code>k</code> (s/mm²) and unfilled density (g/cm³). Cycle ≈ overhead + k × wall². Density drives auto-derived part weight from CAD volume.
+            <button class="reset-btn" onclick="resetConstantsCategory('resins')">Reset resins</button></p>
+            <div id="constants-resins"></div>
+          </div>
+        </details>
+
+        <details class="constants-section">
+          <summary>Filler effects <span class="constants-section-hint">k bumps, densities</span></summary>
+          <div class="constants-section-body">
+            <p class="input-help">Filler additions to base resin: <code>k bump per 10%</code> raises cooling time; <code>density</code> is used in the volumetric blend rule.
+            <button class="reset-btn" onclick="resetConstantsCategory('fillers')">Reset fillers</button></p>
+            <div id="constants-fillers"></div>
+          </div>
+        </details>
+
+        <details class="constants-section">
+          <summary>Auto-estimate tuning <span class="constants-section-hint">target hrs, T/cm², safety</span></summary>
+          <div class="constants-section-body">
+            <p class="input-help">Algorithm constants for cycle/cavity/tonnage estimation.
+            <button class="reset-btn" onclick="resetConstantsCategory('auto')">Reset auto-estimate</button></p>
+            <div id="constants-auto"></div>
+          </div>
+        </details>
+      </div>
+    </details>
+
   </div>
   </div>
 </div>
