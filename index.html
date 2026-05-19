@@ -55,6 +55,13 @@
           <label for="import-file" class="secondary import-file-btn">Choose .step file…</label>
           <input id="import-file" type="file" accept=".step,.stp,.json,application/json" style="display: none;">
           <div id="import-status" class="import-status" hidden></div>
+          <div id="step-viewer" class="step-viewer" hidden>
+            <div class="step-viewer-toolbar">
+              <span>3D preview · drag to rotate, scroll to zoom</span>
+              <button type="button" onclick="resetViewerCamera()">Reset view</button>
+            </div>
+            <div id="step-viewer-canvas"></div>
+          </div>
           <details>
             <summary class="import-paste-toggle">advanced: paste JSON or use FreeCAD CLI</summary>
             <p class="input-help" style="margin-top: 8px;">If you'd rather pre-process via FreeCAD, the file picker above also accepts <code>.should_cost.json</code> output. Or paste JSON directly here.</p>

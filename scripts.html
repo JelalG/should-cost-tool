@@ -1558,6 +1558,184 @@
     return _occtLoadingPromise;
   }
 
+  // ============================================================================
+  // Three.js viewer — lazy-loaded after first successful STEP parse so the
+  // ~600KB library only downloads when needed. Same CDN as occt-import-js;
+  // SRI-pinned for integrity.
+  // ============================================================================
+  const THREE_JS_URL  = 'https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js';
+  const THREE_JS_SRI  = 'sha384-vV17nr/rMaJqmeZkFUzXLpHdQ+ME5QHKdydaqqN+3Ga39RJlNrTatJxHwGV4ml2C';
+  const ORBIT_JS_URL  = 'https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js';
+  const ORBIT_JS_SRI  = 'sha384-I0DMsfimAPIqWT8lF+oA997gRgdUi3jhidoTq3fN0zmn35smXZukD01FLnsPRU9i';
+  let _threeLoadingPromise = null;
+  let viewerState = null;  // { scene, camera, renderer, controls, partGroup, raf }
+
+  async function loadThree() {
+    if (window.THREE && window.THREE.OrbitControls) return window.THREE;
+    if (_threeLoadingPromise) return _threeLoadingPromise;
+    _threeLoadingPromise = (async () => {
+      // Load Three.js core
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = THREE_JS_URL;
+        s.integrity = THREE_JS_SRI;
+        s.crossOrigin = 'anonymous';
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('Failed to load Three.js'));
+        document.head.appendChild(s);
+      });
+      // Load OrbitControls (depends on THREE global)
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = ORBIT_JS_URL;
+        s.integrity = ORBIT_JS_SRI;
+        s.crossOrigin = 'anonymous';
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('Failed to load OrbitControls'));
+        document.head.appendChild(s);
+      });
+      return window.THREE;
+    })();
+    return _threeLoadingPromise;
+  }
+
+  // Initialize the renderer + scene once. Subsequent parses reuse the same
+  // scene and just swap the part geometry.
+  function init3DViewer(container) {
+    const THREE = window.THREE;
+    // CAD convention: Z axis up. Three.js default is Y up; setting DefaultUp
+    // BEFORE any cameras / controls are created flips that convention.
+    THREE.Object3D.DefaultUp.set(0, 0, 1);
+
+    const w = container.clientWidth || 400;
+    const h = 320;
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf7f7f5);
+
+    const camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 100000);
+    camera.up.set(0, 0, 1);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setSize(w, h);
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
+    container.appendChild(renderer.domElement);
+
+    // Lighting — ambient + two directional for shape readability.
+    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    const key = new THREE.DirectionalLight(0xffffff, 0.7);
+    key.position.set(1, 1, 1);
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0xffffff, 0.35);
+    fill.position.set(-1, -1, -0.5);
+    scene.add(fill);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.1;
+    controls.screenSpacePanning = false;
+
+    function animate() {
+      viewerState.raf = requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    // Resize observer keeps the canvas matched to its container width when
+    // the right-panel layout reflows.
+    const onResize = () => {
+      const w = container.clientWidth || 400;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    };
+    window.addEventListener('resize', onResize);
+
+    viewerState = { scene, camera, renderer, controls, partGroup: null, raf: null, onResize, initialView: null };
+    animate();
+  }
+
+  // Build BufferGeometry for each occt-import-js mesh, wrap in a group with
+  // a Base-green material, and frame the camera to the bbox.
+  function display3DPart(meshes) {
+    const THREE = window.THREE;
+    if (!viewerState) return;
+
+    // Remove the previous part if there is one.
+    if (viewerState.partGroup) {
+      viewerState.scene.remove(viewerState.partGroup);
+      viewerState.partGroup.traverse(obj => {
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) obj.material.dispose();
+      });
+    }
+
+    const partGroup = new THREE.Group();
+    meshes.forEach(m => {
+      const verts = m.attributes && m.attributes.position && m.attributes.position.array;
+      const idx = m.index && m.index.array;
+      if (!verts || !idx) return;
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts), 3));
+      geom.setIndex(new THREE.BufferAttribute(new Uint32Array(idx), 1));
+      geom.computeVertexNormals();
+      const material = new THREE.MeshStandardMaterial({
+        color: 0x1E4D2B,         // Base Power green
+        metalness: 0.15,
+        roughness: 0.55,
+        side: THREE.DoubleSide
+      });
+      partGroup.add(new THREE.Mesh(geom, material));
+    });
+    viewerState.scene.add(partGroup);
+    viewerState.partGroup = partGroup;
+
+    // Frame the camera to the bbox so the part fills the view comfortably.
+    const bbox = new THREE.Box3().setFromObject(partGroup);
+    const center = bbox.getCenter(new THREE.Vector3());
+    const size = bbox.getSize(new THREE.Vector3()).length();
+    const fov = viewerState.camera.fov * Math.PI / 180;
+    const fitDist = (size / 2) / Math.tan(fov / 2) * 1.4;  // 1.4 for margin
+    // Position camera looking at the front-right-top of the bbox.
+    const dir = new THREE.Vector3(1, -1, 0.6).normalize();
+    viewerState.camera.position.copy(center).add(dir.multiplyScalar(fitDist));
+    viewerState.camera.near = Math.max(0.1, size / 200);
+    viewerState.camera.far  = size * 200;
+    viewerState.camera.updateProjectionMatrix();
+    viewerState.controls.target.copy(center);
+    viewerState.controls.update();
+
+    // Remember the framing so 'Reset view' can restore it.
+    viewerState.initialView = {
+      position: viewerState.camera.position.clone(),
+      target: center.clone()
+    };
+  }
+
+  // Reset view button — restore the camera to its initial framing.
+  window.resetViewerCamera = function () {
+    if (!viewerState || !viewerState.initialView) return;
+    viewerState.camera.position.copy(viewerState.initialView.position);
+    viewerState.controls.target.copy(viewerState.initialView.target);
+    viewerState.controls.update();
+  };
+
+  // Wrapper called from processStepFile after a successful parse.
+  async function showStepIn3DViewer(meshes) {
+    const panel = document.getElementById('step-viewer');
+    const canvas = document.getElementById('step-viewer-canvas');
+    if (!panel || !canvas) return;
+    panel.hidden = false;
+    try {
+      await loadThree();
+    } catch (err) {
+      panel.hidden = true;
+      console.warn('3D viewer disabled:', err.message);
+      return;
+    }
+    if (!viewerState) init3DViewer(canvas);
+    display3DPart(meshes);
+  }
+
   // Compute volume, surface area, bounding box, and projected areas from the
   // tessellated meshes returned by occt-import-js. Returns both signed and
   // unsigned volume so the caller can detect winding inconsistencies. Also
@@ -1772,6 +1950,8 @@
 
     const payload = buildPayloadFromStepGeometry(geom);
     applyImportedPayload(payload);
+    // Fire-and-forget 3D preview — doesn't block the import status display.
+    showStepIn3DViewer(result.meshes);
     // Compact, cross-checkable summary. Shows BOTH bbox-max and face-projected
     // so the user can see why we chose face-projected (real silhouette) for
     // tonnage instead of the over-counted bbox face for hollow parts.
