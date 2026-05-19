@@ -86,7 +86,7 @@
           <div class="input-group">
             <label class="input-label">Projected Area (cm²)</label>
             <input class="input-field" type="number" id="projectedAreaCm2" min="0" step="any" inputmode="decimal">
-            <span class="input-help">Minimum silhouette area across the three principal planes. Drives clamp tonnage when auto-estimate is on.</span>
+            <span class="input-help">Largest bbox face — the realistic clamp area for plate-like parts. Drives tonnage at 0.85 T/cm² (GF-filled engineering plastics).</span>
           </div>
         </div>
       </div>
@@ -103,7 +103,7 @@
           <span class="toggle-track"><span class="toggle-thumb"></span></span>
           <span class="toggle-label">Auto-fill cavities, cycle time, utilization &amp; tonnage</span>
         </label>
-        <span class="input-help" style="margin-top: 8px;">Derives the four process fields below from the drawing values above plus annual volume. Leave off to enter them manually.</span>
+        <span class="input-help" style="margin-top: 8px;">Fills cavities, cycle, utilization &amp; tonnage <strong>only when</strong> the drawing values (volume, wall, projected area), a resin blend, runner %, and annual volume are all set. Cavity selection uses max of (throughput need, size minimum, volume minimum) — small parts under 50g get min 2 cavities for tool ROI. Tonnage uses the largest bbox face × 0.85 T/cm² (GF-filled engineering plastic; Rosato §7.4).</span>
         <div class="input-row" style="margin-top: 12px;">
           <div class="input-group">
             <label class="input-label">Annual Volume (parts/yr)</label>

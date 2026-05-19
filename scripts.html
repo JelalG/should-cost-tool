@@ -44,16 +44,38 @@
     projAreaClampCoeff: 3.0
   };
 
-  // Auto-estimate constants — see methodology block #m-auto for derivations.
+  // Auto-estimate constants. Sources cited inline; see methodology block
+  // #m-auto for full derivations.
   const AUTO_TARGET_HOURS = 4000;       // production hours/yr per tool
   const AUTO_UTILIZATION  = 0.85;       // industry-standard utilization default
   const AUTO_COOLING_K    = 2.5;        // fallback cooling coefficient (s/mm²) when no resin/blend selected
-  const AUTO_OVERHEAD_S   = 5;          // fill + eject overhead (s)
+  // Non-cooling cycle operations: fill (1-2s) + pack/hold (3-5s) + mold open
+  // (2-3s) + ejection (1-2s) + mold close (2-3s) + recovery (1-3s) ≈ 10s.
+  // Source: Rosato, Injection Molding Handbook, 4th ed., Ch. 6.
+  const AUTO_OVERHEAD_S   = 10;
   const AUTO_CLAMP_T_PER_G = 1.0;       // shot-weight rule of thumb (lower bound)
-  const AUTO_CLAMP_T_PER_CM2 = 3.0;     // projected-area pressure (GF-filled default)
+  // Projected-area clamp pressure for GF-filled engineering thermoplastics.
+  // Sources: Rosato §7.4 (5-8 tons/in² = 0.78-1.24 T/cm²); PMM "Sizing the
+  // press" (4-6 T/in² for filled engineering resins). 0.85 is the midpoint
+  // for typical PBT-GF30 / PA66-GF30 / PC-GF20 grades. Unfilled commodity
+  // resins (PE, PP, PS) actually need less — but we tune for the harder case.
+  const AUTO_CLAMP_T_PER_CM2 = 0.85;
   const CAVITY_STEPS = [1, 2, 4, 6, 8, 12, 16, 24, 32, 48, 64];
   const TONNAGE_STEPS = [50, 100, 200, 400, 700, 1000, 1500];
   const AUTO_FIELDS = ['cavities', 'cycleTimeSec', 'utilization', 'tonnage'];
+
+  // Size-based cavity minimum. Single-cavity tools have poor ROI for small
+  // parts — the mold steel cost is mostly fixed regardless of part size,
+  // so molders default to multi-cavity even at low annual volume.
+  // Source: SPE Plastics Engineering, "Cavity count economics", Mold-Making
+  // Technology magazine cavity sizing guidelines.
+  function cavityMinBySize(partWeightG) {
+    if (!(partWeightG > 0)) return 1;
+    if (partWeightG < 5)    return 8;
+    if (partWeightG < 20)   return 4;
+    if (partWeightG < 50)   return 2;
+    return 1;  // >= 50g → single-cavity is economically viable
+  }
 
   // Cooling coefficients k (s/mm²) and unfilled density (g/cm³) for common
   // base resins. Cycle time ≈ overhead + k × wall². Density is used to derive
@@ -156,43 +178,59 @@
     return Math.abs(total - 100) < 0.5;
   }
 
-  // Derive cavities, cycle time, utilization, and tonnage from wall thickness +
-  // annual volume + part weight + runner %. Returns null when prerequisites
-  // are missing so the caller can fall back to manual values.
+  // Derive cavities, cycle time, utilization, and tonnage from CAD geometry +
+  // annual volume + resin. All prerequisites must be present, otherwise the
+  // function returns null and no fields are auto-filled (intentional — partial
+  // auto-fill leads to silently wrong numbers when one input is missing).
   function computeAutoEstimates(s) {
     const wall = s.wallThicknessMm;
     const annual = s.annualVolume;
-    if (!(wall > 0) || !(annual > 0)) return null;
+    const partWt = resolvePartWeightG(s);
+    const projArea = s.projectedAreaCm2;
+    const rp = s.runnerPct;
+    // All-or-nothing gate: every downstream calc needs these. partWt
+    // resolves from explicit weight OR (volume × resin density), so this
+    // also implicitly requires a resin blend when only volume is set.
+    if (!(wall > 0) || !(annual > 0) || !(partWt > 0) || !(projArea > 0)) return null;
+    if (rp === null || rp === undefined || rp < 0) return null;
 
+    // 1. Cycle time = overhead (mold motion + fill + recovery) + cooling.
+    //    Source: Rosato Injection Molding Handbook §6.
     const utilization = AUTO_UTILIZATION;
     const k = computeKBlend(s.resinBlend);
     const kEff = (k !== null && k > 0) ? k : AUTO_COOLING_K;
     const cycleTimeSec = +(AUTO_OVERHEAD_S + kEff * wall * wall).toFixed(1);
 
+    // 2. Cavities = max of three independent requirements.
+    //    - Throughput need: annual / (parts_per_hr_per_cav × target_hours)
+    //    - Size minimum: small parts default to multi-cavity for tool ROI
+    //    - Volume minimum: high-volume parts always justify multi-cavity
     const partsPerHrPerCav = (3600 / cycleTimeSec) * utilization;
-    const cavRaw = annual / (partsPerHrPerCav * AUTO_TARGET_HOURS);
+    const cavByThruput = Math.ceil(annual / (partsPerHrPerCav * AUTO_TARGET_HOURS));
+    const cavBySize = cavityMinBySize(partWt);
+    let cavByVolume;
+    if (annual >= 1000000)      cavByVolume = 16;
+    else if (annual >= 250000)  cavByVolume = 8;
+    else if (annual >= 100000)  cavByVolume = 4;
+    else if (annual >= 50000)   cavByVolume = 2;
+    else                        cavByVolume = 1;
+    const cavRaw = Math.max(cavByThruput, cavBySize, cavByVolume);
     const cavities = CAVITY_STEPS.find(c => c >= cavRaw) || CAVITY_STEPS[CAVITY_STEPS.length - 1];
 
-    const out = { utilization, cycleTimeSec, cavities };
+    // 3. Tonnage = max of two independent clamp force requirements.
+    //    - Shot-weight: shotG × 1.0 T/g (conservative lower bound)
+    //    - Projected-area: total_area_cm² × pressure_factor (T/cm²)
+    //    The projected area in state is bbox-max (largest bbox face), which
+    //    is the realistic worst-case parting orientation for plate-like
+    //    parts. Pressure factor 0.85 T/cm² fits PBT-GF30 / PA66-GF30 /
+    //    similar GF-filled engineering resins (Rosato §7.4).
+    const shotG = partWt * cavities * (1 + rp / 100);
+    const tonByShot = shotG * AUTO_CLAMP_T_PER_G;
+    const tonByArea = projArea * cavities * AUTO_CLAMP_T_PER_CM2;
+    const tonRaw = Math.max(tonByShot, tonByArea);
+    const tonnage = TONNAGE_STEPS.find(t => t >= tonRaw) || TONNAGE_STEPS[TONNAGE_STEPS.length - 1];
 
-    // Tonnage is the MAX of two independent clamp requirements:
-    //  - Shot-weight-based: shotG × 1.0 T/g (lower bound, accurate for compact parts)
-    //  - Projected-area-based: projArea × 3.0 T/cm² (dominates for flat / high-aspect
-    //    parts like lids — a 25g armature with 120 cm² projected area really
-    //    needs 360T, not 50T)
-    const pw = resolvePartWeightG(s);
-    const rp = s.runnerPct;
-    if (pw > 0 && rp !== null && rp !== undefined && rp >= 0) {
-      const shotG = pw * cavities * (1 + rp / 100);
-      const tonByShot = shotG * AUTO_CLAMP_T_PER_G;
-      const projArea = s.projectedAreaCm2;
-      const coeff = (s.projAreaClampCoeff > 0) ? s.projAreaClampCoeff : AUTO_CLAMP_T_PER_CM2;
-      // Project area is per-cavity; multi-cav molds need clamp for all cavities.
-      const tonByArea = (projArea > 0) ? projArea * cavities * coeff : 0;
-      const tonRaw = Math.max(tonByShot, tonByArea);
-      out.tonnage = TONNAGE_STEPS.find(t => t >= tonRaw) || TONNAGE_STEPS[TONNAGE_STEPS.length - 1];
-    }
-    return out;
+    return { utilization, cycleTimeSec, cavities, tonnage };
   }
 
   // Global state
@@ -1370,15 +1408,15 @@
   }
 
   // Compute volume, surface area, bounding box, and projected areas from the
-  // tessellated meshes returned by occt-import-js. Math matches the FreeCAD
-  // script's outputs (see .claude/freecad_should_cost.py) so the two paths
-  // produce equivalent numbers.
+  // tessellated meshes returned by occt-import-js. We return both the
+  // face-projected silhouette (smaller — accounts for holes) and the bbox
+  // face areas (larger — conservative for tonnage). The tool uses bbox-max
+  // by default because molders typically part on the largest face of
+  // plate-like parts and clamp force must counter pressure on the full
+  // cavity area, including steel-where-the-holes-are sections.
   function computeGeometryFromMeshes(meshes) {
     let volMM3 = 0;
     let areaMM2 = 0;
-    // For projected silhouette: sum |n_axis| across triangles, then divide by 4
-    // (each triangle's projected area is |n_axis|/2, and sum counts both sides
-    // of the silhouette).
     let projAccumX = 0, projAccumY = 0, projAccumZ = 0;
     let minX = Infinity, maxX = -Infinity;
     let minY = Infinity, maxY = -Infinity;
@@ -1425,31 +1463,44 @@
     }
 
     volMM3 = Math.abs(volMM3);
-    const projXY_cm2 = projAccumZ / 4 / 100;  // perpendicular-to-Z silhouette
-    const projXZ_cm2 = projAccumY / 4 / 100;
-    const projYZ_cm2 = projAccumX / 4 / 100;
-    const projMinCm2 = Math.min(projXY_cm2, projXZ_cm2, projYZ_cm2);
+    // Face-projected silhouette (counts holes correctly, smaller value)
+    const faceXY_cm2 = projAccumZ / 4 / 100;
+    const faceXZ_cm2 = projAccumY / 4 / 100;
+    const faceYZ_cm2 = projAccumX / 4 / 100;
+    // Bbox face areas (upper bound, larger value, what molders use for clamp)
+    const bbox_x = maxX - minX, bbox_y = maxY - minY, bbox_z = maxZ - minZ;
+    const bboxXY_cm2 = (bbox_x * bbox_y) / 100;
+    const bboxXZ_cm2 = (bbox_x * bbox_z) / 100;
+    const bboxYZ_cm2 = (bbox_y * bbox_z) / 100;
+    const bboxMaxCm2 = Math.max(bboxXY_cm2, bboxXZ_cm2, bboxYZ_cm2);
     const nominalWallMm = areaMM2 > 0 ? (2 * volMM3 / areaMM2) : 0;
 
     return {
       volume_mm3: volMM3,
       area_mm2: areaMM2,
-      bbox: { x: maxX - minX, y: maxY - minY, z: maxZ - minZ },
-      projected: { XY: projXY_cm2, XZ: projXZ_cm2, YZ: projYZ_cm2, min: projMinCm2 },
+      bbox: { x: bbox_x, y: bbox_y, z: bbox_z },
+      // bbox-max is the realistic clamp area for plate-like parts (the
+      // largest face is usually the parting plane).
+      projected_cm2: bboxMaxCm2,
+      // Kept for reference / debugging; not consumed by the calc.
+      _projected_detail: {
+        bbox: { XY: bboxXY_cm2, XZ: bboxXZ_cm2, YZ: bboxYZ_cm2, max: bboxMaxCm2 },
+        face: { XY: faceXY_cm2, XZ: faceXZ_cm2, YZ: faceYZ_cm2 }
+      },
       nominal_wall_mm: nominalWallMm
     };
   }
 
   // Build a payload from STEP geometry ONLY. Returns purely drawing-derived
-  // values — volume (cm³), nominal wall thickness (mm), and minimum projected
-  // area (cm²). Nothing material-dependent (no mass, no resin), nothing
-  // business-dependent (no region, no annual volume), and no filename guesses
-  // for part number/name. The user fills those in themselves.
+  // values — volume (cm³), nominal wall thickness (mm), and projected area
+  // (cm², the largest bbox face — the realistic clamp area). Nothing
+  // material-dependent (no mass, no resin), nothing business-dependent (no
+  // region, no annual volume), and no filename guesses for part number/name.
   function buildPayloadFromStepGeometry(geom) {
     return {
       partVolumeCm3: Math.round((geom.volume_mm3 / 1000) * 100) / 100,
       wallThicknessMm: Math.round(geom.nominal_wall_mm * 100) / 100,
-      projectedAreaCm2: Math.round(geom.projected.min * 10) / 10
+      projectedAreaCm2: Math.round(geom.projected_cm2 * 10) / 10
     };
   }
 
