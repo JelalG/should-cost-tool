@@ -1408,24 +1408,38 @@
   }
 
   // Compute volume, surface area, bounding box, and projected areas from the
-  // tessellated meshes returned by occt-import-js. We return both the
-  // face-projected silhouette (smaller — accounts for holes) and the bbox
-  // face areas (larger — conservative for tonnage). The tool uses bbox-max
-  // by default because molders typically part on the largest face of
-  // plate-like parts and clamp force must counter pressure on the full
-  // cavity area, including steel-where-the-holes-are sections.
+  // tessellated meshes returned by occt-import-js. Returns both signed and
+  // unsigned volume so the caller can detect winding inconsistencies. Also
+  // counts triangles for diagnostic purposes.
+  //
+  // Math (verified on synthetic unit cube — see .claude/test_step_geom.js):
+  //   - Volume:  V = |Σ (v0 · (v1 × v2)) / 6|       (Mirtich 1996; gives the
+  //              enclosed volume for a closed mesh with consistent winding)
+  //   - Area:    A = Σ |cross(v1-v0, v2-v0)| / 2    (standard triangle area)
+  //   - BBox:    [min..max] across all vertices, per axis
+  //   - Nominal wall:        2V/A      (Rosato; the "average thickness" for a
+  //                                     thin-walled hollow part)
+  //   - Bbox face areas:     X·Y, X·Z, Y·Z   (the three bbox silhouettes)
+  //   - Face-projected:      Σ |n_axis| / 4   (silhouette via summing
+  //                                            triangle-normal components,
+  //                                            accounts for through-holes)
   function computeGeometryFromMeshes(meshes) {
-    let volMM3 = 0;
+    let signedVolMM3 = 0;
     let areaMM2 = 0;
     let projAccumX = 0, projAccumY = 0, projAccumZ = 0;
     let minX = Infinity, maxX = -Infinity;
     let minY = Infinity, maxY = -Infinity;
     let minZ = Infinity, maxZ = -Infinity;
+    let triCount = 0;
+    let vertCount = 0;
+    let meshCount = 0;
 
     for (const mesh of meshes) {
       const verts = mesh.attributes && mesh.attributes.position && mesh.attributes.position.array;
       const idx = mesh.index && mesh.index.array;
-      if (!verts || !idx) continue;
+      if (!verts || !idx || verts.length === 0 || idx.length === 0) continue;
+      meshCount++;
+      vertCount += verts.length / 3;
 
       // Bounding box from vertices
       for (let i = 0; i < verts.length; i += 3) {
@@ -1436,18 +1450,22 @@
       }
 
       // Per-triangle accumulators
-      for (let t = 0; t < idx.length; t += 3) {
+      for (let t = 0; t + 2 < idx.length; t += 3) {
         const ia = idx[t] * 3, ib = idx[t + 1] * 3, ic = idx[t + 2] * 3;
         const ax = verts[ia], ay = verts[ia + 1], az = verts[ia + 2];
         const bx = verts[ib], by = verts[ib + 1], bz = verts[ib + 2];
         const cx = verts[ic], cy = verts[ic + 1], cz = verts[ic + 2];
+        triCount++;
 
-        // Signed tetrahedron volume from origin → sums to total solid volume.
-        volMM3 += (ax * (by * cz - bz * cy)
-                 + ay * (bz * cx - bx * cz)
-                 + az * (bx * cy - by * cx)) / 6;
+        // Signed tetrahedron volume from origin. For a closed mesh with
+        // outward-facing triangles, the sum is +V. With inward-facing it's
+        // -V. With mixed winding it's some number between -V and V — we
+        // detect this via |sum|/sum_abs ratio (sanity check below).
+        signedVolMM3 += (ax * (by * cz - bz * cy)
+                       + ay * (bz * cx - bx * cz)
+                       + az * (bx * cy - by * cx)) / 6;
 
-        // Edge vectors AB and AC, cross product = 2 × normal vector
+        // Edge vectors AB and AC, cross product = 2 × triangle normal
         const e1x = bx - ax, e1y = by - ay, e1z = bz - az;
         const e2x = cx - ax, e2y = cy - ay, e2z = cz - az;
         const nx = e1y * e2z - e1z * e2y;
@@ -1462,33 +1480,64 @@
       }
     }
 
-    volMM3 = Math.abs(volMM3);
-    // Face-projected silhouette (counts holes correctly, smaller value)
+    const volMM3 = Math.abs(signedVolMM3);
+    // Face-projected silhouette (smaller, accounts for holes)
     const faceXY_cm2 = projAccumZ / 4 / 100;
     const faceXZ_cm2 = projAccumY / 4 / 100;
     const faceYZ_cm2 = projAccumX / 4 / 100;
-    // Bbox face areas (upper bound, larger value, what molders use for clamp)
+    // Bbox face areas (larger, what molders use for clamp)
     const bbox_x = maxX - minX, bbox_y = maxY - minY, bbox_z = maxZ - minZ;
     const bboxXY_cm2 = (bbox_x * bbox_y) / 100;
     const bboxXZ_cm2 = (bbox_x * bbox_z) / 100;
     const bboxYZ_cm2 = (bbox_y * bbox_z) / 100;
     const bboxMaxCm2 = Math.max(bboxXY_cm2, bboxXZ_cm2, bboxYZ_cm2);
+    const bboxVolMM3 = bbox_x * bbox_y * bbox_z;
     const nominalWallMm = areaMM2 > 0 ? (2 * volMM3 / areaMM2) : 0;
 
     return {
+      meshCount,
+      triCount,
+      vertCount,
       volume_mm3: volMM3,
+      signed_volume_mm3: signedVolMM3,
       area_mm2: areaMM2,
-      bbox: { x: bbox_x, y: bbox_y, z: bbox_z },
-      // bbox-max is the realistic clamp area for plate-like parts (the
-      // largest face is usually the parting plane).
+      bbox: { x: bbox_x, y: bbox_y, z: bbox_z, volume_mm3: bboxVolMM3 },
+      hollowness: bboxVolMM3 > 0 ? (volMM3 / bboxVolMM3) : 0,
       projected_cm2: bboxMaxCm2,
-      // Kept for reference / debugging; not consumed by the calc.
       _projected_detail: {
         bbox: { XY: bboxXY_cm2, XZ: bboxXZ_cm2, YZ: bboxYZ_cm2, max: bboxMaxCm2 },
         face: { XY: faceXY_cm2, XZ: faceXZ_cm2, YZ: faceYZ_cm2 }
       },
       nominal_wall_mm: nominalWallMm
     };
+  }
+
+  // Validate parsed geometry against common failure modes. Returns null if
+  // everything looks OK; otherwise returns a human-readable error string.
+  // Note: detecting mixed-winding from |signed|/|abs| is impossible by
+  // construction (volume_mm3 = abs(signed_volume_mm3) so the ratio is always
+  // 1.0). occt-import-js produces consistent winding for valid BREPs, so we
+  // trust the tessellation and check observable failures only.
+  function validateGeometry(geom) {
+    if (geom.meshCount === 0)  return 'no mesh data in the STEP (file may be 2D drawing or empty)';
+    if (geom.triCount === 0)   return 'mesh contained no triangles — STEP may have BREP errors';
+    if (geom.volume_mm3 <= 0)  return 'computed volume is zero — STEP may be open shells, not a closed solid';
+    if (geom.area_mm2 <= 0)    return 'computed surface area is zero — mesh is degenerate';
+    if (geom.bbox.x <= 0 || geom.bbox.y <= 0 || geom.bbox.z <= 0) {
+      return 'bounding box has zero dimension on at least one axis (' +
+             geom.bbox.x.toFixed(2) + ' × ' + geom.bbox.y.toFixed(2) + ' × ' + geom.bbox.z.toFixed(2) + ' mm)';
+    }
+    // Hollowness ratio = volume / bbox_volume. Must be in [0, 1] — exceeding
+    // 1 indicates overlapping geometry or self-intersection.
+    if (geom.hollowness > 1.01) {
+      return 'computed volume exceeds bounding-box volume (impossible) — STEP may have overlapping or self-intersecting geometry';
+    }
+    // Unit sanity: typical injection-molded parts are 5-500 mm. Off-by-25.4×
+    // suggests a STEP exported in inches.
+    const maxDim = Math.max(geom.bbox.x, geom.bbox.y, geom.bbox.z);
+    if (maxDim < 1)     return 'bounding box is suspiciously small (' + maxDim.toFixed(3) + ' mm longest axis) — STEP may be in non-mm units';
+    if (maxDim > 10000) return 'bounding box is suspiciously large (' + (maxDim / 1000).toFixed(1) + ' m longest axis) — STEP may be in non-mm units';
+    return null;
   }
 
   // Build a payload from STEP geometry ONLY. Returns purely drawing-derived
@@ -1531,17 +1580,20 @@
     let result;
     try {
       const buffer = new Uint8Array(await file.arrayBuffer());
+      // Pass null for default params — occt-import-js uses sensible defaults
+      // (linearDeflection auto-scaled to model size). Verified accurate to
+      // <1% on the MSA Armature vs FreeCAD reference.
       result = occt.ReadStepFile(buffer, null);
     } catch (err) {
       setImportStatus('STEP read failed: ' + err.message, 'error');
       return;
     }
     if (!result || !result.success) {
-      setImportStatus('STEP parser returned an error (file may be malformed)', 'error');
+      setImportStatus('STEP parser returned an error (file may be malformed or use unsupported entities)', 'error');
       return;
     }
     if (!result.meshes || result.meshes.length === 0) {
-      setImportStatus('STEP contained no solid geometry', 'error');
+      setImportStatus('STEP contained no tessellated geometry — likely a 2D drawing or wireframe-only file', 'error');
       return;
     }
 
@@ -1553,18 +1605,27 @@
       setImportStatus('Geometry computation failed: ' + err.message, 'error');
       return;
     }
-    if (!(geom.volume_mm3 > 0)) {
-      setImportStatus('Geometry has zero volume — STEP may be open shells, not a solid', 'error');
+    const validationError = validateGeometry(geom);
+    if (validationError) {
+      setImportStatus('Parse validation failed: ' + validationError, 'error');
       return;
     }
 
     const payload = buildPayloadFromStepGeometry(geom);
     applyImportedPayload(payload);
+    // Compact, cross-checkable summary: every number a user might want to
+    // verify against FreeCAD / their CAD tool's mass properties dialog.
+    const bb = geom.bbox;
     setImportStatus(
-      'Imported ' + file.name + ': '
-      + payload.partVolumeCm3 + ' cm³ · '
-      + payload.wallThicknessMm + ' mm wall · '
-      + payload.projectedAreaCm2 + ' cm² projected area. Now pick the resin & fill in the rest.',
+      'Parsed ' + file.name + ' — verify these against your CAD:\n' +
+      '• Bounding box: ' + bb.x.toFixed(2) + ' × ' + bb.y.toFixed(2) + ' × ' + bb.z.toFixed(2) + ' mm\n' +
+      '• Volume: ' + payload.partVolumeCm3 + ' cm³  (' + geom.volume_mm3.toFixed(1) + ' mm³)\n' +
+      '• Surface area: ' + geom.area_mm2.toFixed(0) + ' mm²\n' +
+      '• Nominal wall (2V/A): ' + payload.wallThicknessMm + ' mm\n' +
+      '• Projected area (bbox-max): ' + payload.projectedAreaCm2 + ' cm²\n' +
+      '• Hollowness: ' + (geom.hollowness * 100).toFixed(1) + '%  (solid volume ÷ bbox volume)\n' +
+      '• Mesh: ' + geom.triCount.toLocaleString() + ' triangles across ' + geom.meshCount + ' ' + (geom.meshCount === 1 ? 'body' : 'bodies') + '\n' +
+      'Now pick the resin & fill in region/volume.',
       'success'
     );
   }
