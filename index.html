@@ -58,9 +58,17 @@
           <div id="step-viewer" class="step-viewer" hidden>
             <div class="step-viewer-toolbar">
               <span>3D preview · drag to rotate, scroll to zoom</span>
-              <button type="button" onclick="resetViewerCamera()">Reset view</button>
+              <div class="viewer-buttons">
+                <button type="button" id="viewer-measure-btn" onclick="toggleMeasureMode()">Measure</button>
+                <button type="button" onclick="clearMeasurements()">Clear</button>
+                <button type="button" onclick="resetViewerCamera()">Reset view</button>
+              </div>
             </div>
-            <div id="step-viewer-canvas"></div>
+            <div id="step-viewer-canvas">
+              <div id="viewer-bbox-overlay" class="viewer-overlay viewer-bbox-overlay" hidden></div>
+              <div id="viewer-measure-hint" class="viewer-overlay viewer-measure-hint" hidden>Click on the part to place a point</div>
+              <div id="viewer-measure-label" class="viewer-overlay viewer-measure-label" hidden></div>
+            </div>
           </div>
           <details>
             <summary class="import-paste-toggle">advanced: paste JSON or use FreeCAD CLI</summary>

@@ -332,16 +332,23 @@
       to { transform: rotate(360deg); }
     }
 
-    /* Editable constants panel */
+    /* Editable constants panel — horizontal padding so content doesn't touch
+       the outer panel borders. methodology-body defaults to 0 horizontal,
+       so this override is necessary. */
+    #editable-constants-panel > summary {
+      padding: 14px 22px;
+    }
+    #editable-constants-panel .methodology-body {
+      padding: 8px 22px 18px;
+    }
     .constants-help {
       font-size: 12px;
       color: var(--grey-60);
-      margin: 0 0 14px 0;
-      padding: 0 4px;
+      margin: 4px 0 14px 0;
       line-height: 1.5;
     }
     .constants-section {
-      margin: 10px 4px;
+      margin: 10px 0;
       border: 1px solid var(--grey-20);
       border-radius: var(--radius-sm);
       background: var(--strike);
@@ -461,6 +468,15 @@
       color: var(--terminal);
       border-color: var(--grey-60);
     }
+    .step-viewer-toolbar button.active {
+      background: var(--energy);
+      color: var(--strike);
+      border-color: var(--energy);
+    }
+    .step-viewer-toolbar .viewer-buttons {
+      display: flex;
+      gap: 6px;
+    }
     #step-viewer-canvas {
       width: 100%;
       height: 320px;
@@ -472,6 +488,53 @@
     }
     #step-viewer-canvas canvas:active {
       cursor: grabbing;
+    }
+    /* Measure mode: change cursor to crosshair so users know to click on the part */
+    #step-viewer-canvas.measuring canvas {
+      cursor: crosshair;
+    }
+    #step-viewer-canvas.measuring canvas:active {
+      cursor: crosshair;
+    }
+
+    /* Overlays inside the viewer canvas */
+    .viewer-overlay {
+      position: absolute;
+      pointer-events: none;
+      font-family: 'Inter', system-ui, sans-serif;
+      font-variant-numeric: tabular-nums;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--terminal);
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid var(--grey-20);
+      border-radius: 3px;
+      padding: 6px 10px;
+      line-height: 1.4;
+      white-space: nowrap;
+    }
+    .viewer-bbox-overlay {
+      top: 10px;
+      left: 10px;
+    }
+    .viewer-bbox-overlay .axis-label {
+      color: var(--grey-60);
+      font-weight: 500;
+      margin-right: 4px;
+    }
+    .viewer-measure-label {
+      transform: translate(-50%, -50%);
+      background: var(--terminal);
+      color: var(--strike);
+      border-color: var(--terminal);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+    .viewer-measure-hint {
+      top: 10px;
+      right: 10px;
+      color: var(--energy);
+      border-color: var(--energy);
+      background: rgba(255,255,255,0.95);
     }
 
     /* "From the drawing" section — visually distinct from input sections so

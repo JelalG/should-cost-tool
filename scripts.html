@@ -1637,6 +1637,7 @@
     function animate() {
       viewerState.raf = requestAnimationFrame(animate);
       controls.update();
+      updateMeasureLabelPosition();
       renderer.render(scene, camera);
     }
 
@@ -1652,6 +1653,7 @@
 
     viewerState = { scene, camera, renderer, controls, partGroup: null, raf: null, onResize, initialView: null };
     animate();
+    attachViewerClickHandler();
   }
 
   // Build BufferGeometry for each occt-import-js mesh, wrap in a group with
@@ -1659,6 +1661,9 @@
   function display3DPart(meshes) {
     const THREE = window.THREE;
     if (!viewerState) return;
+
+    // Loading a new part invalidates any previous measurements.
+    clearMeasurementGeometry();
 
     // Remove the previous part if there is one.
     if (viewerState.partGroup) {
@@ -1719,8 +1724,163 @@
     viewerState.controls.update();
   };
 
+  // ============================================================================
+  // Measurement tool — click two points on the part to measure straight-line
+  // distance. Raycaster picks the surface point; markers + line are drawn in
+  // 3D, the distance label is an HTML overlay projected back to 2D each frame.
+  // ============================================================================
+  let measureState = {
+    active: false,
+    points: [],          // array of THREE.Vector3 picked on the surface
+    markers: [],         // sphere meshes for each picked point
+    line: null,          // line connecting the two points
+    raycaster: null,
+    clickHandler: null
+  };
+
+  function clearMeasurementGeometry() {
+    if (!viewerState) return;
+    measureState.markers.forEach(m => {
+      viewerState.scene.remove(m);
+      m.geometry.dispose();
+      m.material.dispose();
+    });
+    measureState.markers = [];
+    if (measureState.line) {
+      viewerState.scene.remove(measureState.line);
+      measureState.line.geometry.dispose();
+      measureState.line.material.dispose();
+      measureState.line = null;
+    }
+    measureState.points = [];
+    const label = document.getElementById('viewer-measure-label');
+    if (label) label.hidden = true;
+  }
+
+  window.clearMeasurements = function () {
+    clearMeasurementGeometry();
+  };
+
+  window.toggleMeasureMode = function () {
+    measureState.active = !measureState.active;
+    const btn = document.getElementById('viewer-measure-btn');
+    const canvas = document.getElementById('step-viewer-canvas');
+    const hint = document.getElementById('viewer-measure-hint');
+    if (btn) btn.classList.toggle('active', measureState.active);
+    if (canvas) canvas.classList.toggle('measuring', measureState.active);
+    if (hint) hint.hidden = !measureState.active;
+    if (measureState.active) {
+      // Starting a fresh measurement: clear previous markers.
+      clearMeasurementGeometry();
+    }
+  };
+
+  // Place a measurement point at the picked surface position. After the
+  // second point is placed, draws the line + distance label and exits
+  // measure mode (so the next click doesn't immediately start a third).
+  function placeMeasurePoint(point) {
+    const THREE = window.THREE;
+    if (!viewerState) return;
+
+    // Marker (small sphere). Size scales with the part's bbox so it's visible
+    // on tiny parts and not gigantic on big ones.
+    const partBox = new THREE.Box3().setFromObject(viewerState.partGroup);
+    const partSize = partBox.getSize(new THREE.Vector3()).length();
+    const markerRadius = Math.max(0.3, partSize / 80);
+    const markerGeom = new THREE.SphereGeometry(markerRadius, 12, 8);
+    const markerMat = new THREE.MeshBasicMaterial({ color: 0xED6C30, depthTest: false });
+    const marker = new THREE.Mesh(markerGeom, markerMat);
+    marker.position.copy(point);
+    marker.renderOrder = 999;  // draw on top
+    viewerState.scene.add(marker);
+    measureState.markers.push(marker);
+    measureState.points.push(point.clone());
+
+    // When we have two points, draw the line + distance label.
+    if (measureState.points.length === 2) {
+      const [a, b] = measureState.points;
+      const lineGeom = new THREE.BufferGeometry().setFromPoints([a, b]);
+      const lineMat = new THREE.LineBasicMaterial({ color: 0xED6C30, depthTest: false });
+      const line = new THREE.Line(lineGeom, lineMat);
+      line.renderOrder = 998;
+      viewerState.scene.add(line);
+      measureState.line = line;
+
+      const dist = a.distanceTo(b);
+      const label = document.getElementById('viewer-measure-label');
+      if (label) {
+        label.textContent = dist.toFixed(2) + ' mm';
+        label.hidden = false;
+      }
+
+      // Exit measure mode automatically — clicking again starts a fresh pair.
+      measureState.active = false;
+      const btn = document.getElementById('viewer-measure-btn');
+      const canvas = document.getElementById('step-viewer-canvas');
+      const hint = document.getElementById('viewer-measure-hint');
+      if (btn) btn.classList.remove('active');
+      if (canvas) canvas.classList.remove('measuring');
+      if (hint) hint.hidden = true;
+    }
+  }
+
+  // Project the measure label's 3D position (midpoint of the two points) to
+  // 2D so it follows the points as the camera orbits. Called every frame
+  // from the animation loop when a measurement exists.
+  function updateMeasureLabelPosition() {
+    if (!viewerState || measureState.points.length !== 2) return;
+    const label = document.getElementById('viewer-measure-label');
+    const canvas = document.getElementById('step-viewer-canvas');
+    if (!label || !canvas || label.hidden) return;
+    const mid = measureState.points[0].clone().lerp(measureState.points[1], 0.5);
+    const projected = mid.clone().project(viewerState.camera);
+    // Clip if behind camera
+    if (projected.z > 1) { label.style.opacity = '0'; return; }
+    label.style.opacity = '1';
+    const rect = canvas.getBoundingClientRect();
+    const x = ((projected.x + 1) / 2) * rect.width;
+    const y = ((-projected.y + 1) / 2) * rect.height;
+    label.style.left = x + 'px';
+    label.style.top  = y + 'px';
+  }
+
+  // Set up the click handler that translates a click into a surface point
+  // via raycasting. Wired once when the viewer is first initialized.
+  function attachViewerClickHandler() {
+    const THREE = window.THREE;
+    if (!viewerState || measureState.clickHandler) return;
+    measureState.raycaster = new THREE.Raycaster();
+    const canvas = viewerState.renderer.domElement;
+    const handler = (e) => {
+      if (!measureState.active) return;
+      if (!viewerState.partGroup) return;
+      const rect = canvas.getBoundingClientRect();
+      const mouse = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1
+      );
+      measureState.raycaster.setFromCamera(mouse, viewerState.camera);
+      const hits = measureState.raycaster.intersectObjects(viewerState.partGroup.children, true);
+      if (hits.length > 0) placeMeasurePoint(hits[0].point);
+    };
+    canvas.addEventListener('click', handler);
+    measureState.clickHandler = handler;
+  }
+
+  // Populate the bbox overlay with X/Y/Z dimensions from the parsed geometry.
+  // Called from showStepIn3DViewer once a part loads.
+  function updateBboxOverlay(bbox) {
+    const el = document.getElementById('viewer-bbox-overlay');
+    if (!el) return;
+    el.innerHTML =
+      '<span class="axis-label">X</span>' + bbox.x.toFixed(1) + ' mm &nbsp;·&nbsp; ' +
+      '<span class="axis-label">Y</span>' + bbox.y.toFixed(1) + ' mm &nbsp;·&nbsp; ' +
+      '<span class="axis-label">Z</span>' + bbox.z.toFixed(1) + ' mm';
+    el.hidden = false;
+  }
+
   // Wrapper called from processStepFile after a successful parse.
-  async function showStepIn3DViewer(meshes) {
+  async function showStepIn3DViewer(meshes, geom) {
     const panel = document.getElementById('step-viewer');
     const canvas = document.getElementById('step-viewer-canvas');
     if (!panel || !canvas) return;
@@ -1734,6 +1894,7 @@
     }
     if (!viewerState) init3DViewer(canvas);
     display3DPart(meshes);
+    if (geom && geom.bbox) updateBboxOverlay(geom.bbox);
   }
 
   // Compute volume, surface area, bounding box, and projected areas from the
@@ -1951,7 +2112,7 @@
     const payload = buildPayloadFromStepGeometry(geom);
     applyImportedPayload(payload);
     // Fire-and-forget 3D preview — doesn't block the import status display.
-    showStepIn3DViewer(result.meshes);
+    showStepIn3DViewer(result.meshes, geom);
     // Compact, cross-checkable summary. Shows BOTH bbox-max and face-projected
     // so the user can see why we chose face-projected (real silhouette) for
     // tonnage instead of the over-counted bbox face for hollow parts.
