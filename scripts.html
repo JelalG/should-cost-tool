@@ -1632,7 +1632,12 @@
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.1;
-    controls.screenSpacePanning = false;
+    // Screen-space panning: right-drag moves the orbit target along the
+    // camera's local plane — intuitive for inspecting part regions.
+    controls.screenSpacePanning = true;
+    // Scroll wheel zooms toward the cursor position, not the orbit center.
+    // Lets users pinpoint a feature by hovering over it before scrolling in.
+    controls.zoomToCursor = true;
 
     function animate() {
       viewerState.raf = requestAnimationFrame(animate);
@@ -1783,11 +1788,12 @@
     if (!viewerState) return;
 
     // Marker (small sphere). Size scales with the part's bbox so it's visible
-    // on tiny parts and not gigantic on big ones.
+    // on tiny parts and not obscuring the surface on big ones. Smaller than
+    // v42 (was bbox/80) so the pick point is precise.
     const partBox = new THREE.Box3().setFromObject(viewerState.partGroup);
     const partSize = partBox.getSize(new THREE.Vector3()).length();
-    const markerRadius = Math.max(0.3, partSize / 80);
-    const markerGeom = new THREE.SphereGeometry(markerRadius, 12, 8);
+    const markerRadius = Math.max(0.15, partSize / 200);
+    const markerGeom = new THREE.SphereGeometry(markerRadius, 16, 10);
     const markerMat = new THREE.MeshBasicMaterial({ color: 0xED6C30, depthTest: false });
     const marker = new THREE.Mesh(markerGeom, markerMat);
     marker.position.copy(point);
