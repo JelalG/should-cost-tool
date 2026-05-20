@@ -1461,16 +1461,19 @@
   }
 
   // Generate a vendor RFQ template — blank-fill spreadsheet the buyer sends
-  // to a quoting vendor. Server-side exportRFQTemplate() does the styling.
+  // to a quoting vendor. Works whether or not parts are selected:
+  //   - Parts selected → those become the columns, part identification pre-
+  //     filled (number, name, material spec, region, annual volume, weight)
+  //   - Nothing selected → 3 empty 'Part 1 / Part 2 / Part 3' columns the
+  //     vendor fills from scratch (also useful for early-stage RFQs before
+  //     parts are in the library)
   async function handleExportRFQ() {
-    if (selectedPartKeys.size === 0) {
-      showToast('Select parts first, then click Export for Vendor RFQ', 'error');
-      return;
-    }
     const selected = savedParts.filter(p => selectedPartKeys.has(p.key));
+    const usingBlank = selected.length === 0;
+    const partsToExport = usingBlank ? [{}, {}, {}] : selected;
     try {
-      showToast('Building RFQ template…');
-      const url = await runServer('exportRFQTemplate', JSON.stringify(selected));
+      showToast(usingBlank ? 'Building blank RFQ template (3 part columns)…' : 'Building RFQ template for ' + selected.length + ' part' + (selected.length === 1 ? '' : 's') + '…');
+      const url = await runServer('exportRFQTemplate', JSON.stringify(partsToExport));
       const a = document.createElement('a');
       a.href = url;
       a.target = '_blank';
