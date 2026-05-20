@@ -663,7 +663,12 @@ function exportRFQTemplate(partsJson) {
     sheet.setColumnWidth(1, 240);
     sheet.setColumnWidth(2, 360);
     parts.forEach(function(p, i) { sheet.setColumnWidth(3 + i, 180); });
-    sheet.setFrozenColumns(2);
+    // Note: frozen columns aren't compatible with the row-spanning merges
+    // we use for the title / section headers / instructions block (Sheets
+    // errors if a merged range straddles the freeze boundary). Frozen
+    // ROWS still apply, so the part-name header row stays visible while
+    // scrolling through the question rows. For exports with many parts,
+    // user can manually freeze cols via View → Freeze in the Sheet.
 
     return ss.getUrl();
   } catch (e) {
