@@ -13,6 +13,28 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
+// One-time setup function: point the tool at a specific pre-existing Sheet
+// instead of letting auto-bootstrap create a new one. Run from the Apps
+// Script editor (function dropdown → setPartsSheetIdManually → Run) when
+// migrating to a known Sheet ID. The Sheet must have a 'Parts Library' tab
+// (and ideally a 'Resin Library' tab); getOrCreatePartsSheet will extend
+// the header row to add any missing columns.
+function setPartsSheetIdManually() {
+  // Update this constant when pointing the tool at a different Sheet.
+  const sheetId = '15afFg0SQgLz9lOUP-bqKSmPez3Q0Vuj2Y8qb0nharYk';
+  PropertiesService.getScriptProperties().setProperty('PARTS_SHEET_ID', sheetId);
+  // Verify access + ensure header structure is current (adds new columns
+  // like comparisonMode, secOpsMin, projectedAreaCm2 if they're missing).
+  const ss = SpreadsheetApp.openById(sheetId);
+  const partsSheet = getOrCreatePartsSheet(ss);
+  const blendsSheet = getOrCreateResinSheet(ss);
+  Logger.log('PARTS_SHEET_ID set to: ' + sheetId);
+  Logger.log('Spreadsheet: ' + ss.getUrl());
+  Logger.log('Parts Library: ' + Math.max(0, partsSheet.getLastRow() - 1) + ' rows.');
+  Logger.log('Resin Library: ' + Math.max(0, blendsSheet.getLastRow() - 1) + ' rows.');
+  return ss.getUrl();
+}
+
 // Resolve the backing spreadsheet, auto-creating it on first run so end users
 // don't need to manually wire PARTS_SHEET_ID in Script Properties or share a
 // pre-existing Drive file. Subsequent calls reuse the stored ID.
