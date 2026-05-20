@@ -1460,6 +1460,27 @@
     }
   }
 
+  // Generate a vendor RFQ template — blank-fill spreadsheet the buyer sends
+  // to a quoting vendor. Server-side exportRFQTemplate() does the styling.
+  async function handleExportRFQ() {
+    if (selectedPartKeys.size === 0) {
+      showToast('Select parts first, then click Export for Vendor RFQ', 'error');
+      return;
+    }
+    const selected = savedParts.filter(p => selectedPartKeys.has(p.key));
+    try {
+      showToast('Building RFQ template…');
+      const url = await runServer('exportRFQTemplate', JSON.stringify(selected));
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.click();
+      showToast('Vendor RFQ ready — opening sheet…');
+    } catch (e) {
+      showToast('RFQ export failed: ' + e.message, 'error');
+    }
+  }
+
   // New part
   function handleNewPart() {
     state = { ...DEFAULTS };

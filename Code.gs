@@ -408,3 +408,266 @@ function exportPartsToSheet(partsJson) {
     throw e;
   }
 }
+
+// ============================================================================
+// Vendor RFQ export — generates a blank-fill template the buyer team sends to
+// a quoting vendor. Each selected part becomes a column; each row is a
+// question (resin grade, cycle, tonnage, cost breakdown, pricing tiers,
+// commercial terms). Yellow cells are for the vendor to fill; white cells
+// are our spec / requirement.
+// ============================================================================
+
+// Friendly resin name for the RFQ pre-fill. Uses the saved blend name when
+// available, else composes from the resin + filler composition.
+function resinDisplayName_(blend) {
+  if (!blend) return '';
+  if (blend.name) return blend.name;
+  const resins = (blend.resins || []).filter(function(r) { return r && r.resinId && r.weightPct > 0; });
+  if (resins.length === 0) return '';
+  const base = resins.map(function(r) { return r.resinId + ' ' + r.weightPct + '%'; }).join(', ');
+  const f = blend.filler;
+  if (f && f.type && f.type !== 'none' && f.pct > 0) {
+    return base + ' + ' + f.type + ' ' + f.pct + '%';
+  }
+  return base;
+}
+
+// RFQ structure. Each section has plain-English questions designed for a
+// vendor who hasn't seen our internal jargon. Pre-filled rows show our spec;
+// vendor-fill rows are highlighted yellow.
+//   label  — the prompt shown to the vendor
+//   help   — clarifying description in column B
+//   value  — function(part) returning the pre-fill value (omit for vendor-fill)
+//   fill   — true → yellow background (vendor fills this cell)
+//   format — Sheets number-format string for the value cells
+const RFQ_SECTIONS_ = [
+  {
+    name: 'Part identification (pre-filled by Base Power)',
+    questions: [
+      { label: 'Part number',            help: 'Internal Base Power part number.',
+        value: function(p) { return p.partNumber || ''; } },
+      { label: 'Part name',              help: 'Descriptive name.',
+        value: function(p) { return p.partName || ''; } },
+      { label: 'Material specification', help: 'The resin grade we want the part molded from. You can propose an equivalent in the Material section below.',
+        value: function(p) { return resinDisplayName_(p.resinBlend); } },
+      { label: 'Region of manufacture',  help: 'Where we expect the part to be produced.',
+        value: function(p) { return p.region || ''; } },
+      { label: 'Annual volume target',   help: 'Forecasted yearly demand.',
+        value: function(p) { return p.annualVolume || ''; }, format: '#,##0' },
+      { label: 'Part weight (g)',        help: 'Net weight of one finished part (from CAD).',
+        value: function(p) { return p.partWeightG || ''; }, format: '0.00' }
+    ]
+  },
+  {
+    name: 'Material — please confirm our spec or propose an equivalent',
+    questions: [
+      { label: 'Resin grade you would use',           help: 'Brand and grade (e.g. RTP 1005, LANXESS Pocan B1305). Match our spec above or propose a substitution.', fill: true },
+      { label: 'Resin cost (USD per kg)',             help: 'Local market price for this resin grade, including inbound freight to your factory.', fill: true, format: '$#,##0.00' },
+      { label: 'Resin lead time (weeks)',             help: 'Typical procurement lead time.', fill: true, format: '0' },
+      { label: 'Colorant / masterbatch ($/kg, if any)', help: 'Per-kg cost of any color compounding required. Leave blank if natural color.', fill: true, format: '$#,##0.00' }
+    ]
+  },
+  {
+    name: 'Tooling — your proposal',
+    questions: [
+      { label: 'Number of cavities',         help: 'Parts produced per shot in your proposed tool.', fill: true, format: '0' },
+      { label: 'Tool steel',                 help: 'e.g. P20, NAK80, S136, H13 — drives tool life and cost.', fill: true },
+      { label: 'Expected tool life (shots)', help: 'Total shots before the tool needs major refurb or retirement.', fill: true, format: '#,##0' },
+      { label: 'Tooling cost / NRE (USD)',   help: 'One-time cost for the mold. Indicate if shared across multiple parts (family tool).', fill: true, format: '$#,##0' },
+      { label: 'Tool lead time (weeks)',     help: 'From PO acceptance to first article approval.', fill: true, format: '0' }
+    ]
+  },
+  {
+    name: 'Process — your proposal',
+    questions: [
+      { label: 'Press tonnage (T)',                  help: 'Clamp force of the press you would run this part on.', fill: true, format: '#,##0' },
+      { label: 'Cycle time (sec per shot)',          help: 'Total seconds: mold close + fill + pack + cool + open + eject.', fill: true, format: '0.0' },
+      { label: 'Machine utilization (%)',            help: 'Effective uptime (typical 80-90%).', fill: true, format: '0.0%' },
+      { label: 'Runner type',                        help: 'Hot runner / cold runner / runnerless.', fill: true },
+      { label: 'Runner % (cold-runner only)',        help: 'Runner weight as a percentage of part weight.', fill: true, format: '0.0%' },
+      { label: 'Regrind rate (%)',                   help: 'Percentage of runner reground and reused.', fill: true, format: '0.0%' },
+      { label: 'Scrap rate (%)',                     help: 'Typical reject rate at steady state.', fill: true, format: '0.0%' },
+      { label: 'Secondary operations (min/part)',    help: 'Post-mold work: trim, kit, pad print, assembly. Zero if clean-shot only.', fill: true, format: '0.0' }
+    ]
+  },
+  {
+    name: 'Cost build-up — please disclose components',
+    questions: [
+      { label: 'Material cost ($/part)',     help: '(resin + runner − regrind) × cost-per-kg, per part.', fill: true, format: '$#,##0.0000' },
+      { label: 'Machine hourly rate ($/hr)', help: 'Fully-burdened press rate (capital + utilities + maintenance + facilities).', fill: true, format: '$#,##0.00' },
+      { label: 'Operators per machine',      help: 'How many machines does one operator tend?', fill: true, format: '0.0' },
+      { label: 'Direct labor rate ($/hr)',   help: 'Operator wage including burden (benefits, payroll tax).', fill: true, format: '$#,##0.00' },
+      { label: 'Overhead rate (%)',          help: 'Indirect costs as a percentage of direct labor.', fill: true, format: '0.0%' },
+      { label: 'SG&A rate (%)',              help: 'Sales / general / administrative as a percentage of manufacturing cost.', fill: true, format: '0.0%' },
+      { label: 'Margin (%)',                 help: 'Profit margin applied on top of cost.', fill: true, format: '0.0%' },
+      { label: 'Packaging cost ($/part)',    help: 'Per-part packaging, labeling, and palletizing.', fill: true, format: '$#,##0.00' }
+    ]
+  },
+  {
+    name: 'Pricing tiers — your piece-price quote',
+    questions: [
+      { label: 'MOQ tier 1 — quantity',    help: 'Smallest order quantity you would accept.', fill: true, format: '#,##0' },
+      { label: 'MOQ tier 1 — piece price', help: 'Per-piece USD price at tier 1 quantity.',   fill: true, format: '$#,##0.0000' },
+      { label: 'MOQ tier 2 — quantity',                                                       fill: true, format: '#,##0' },
+      { label: 'MOQ tier 2 — piece price',                                                    fill: true, format: '$#,##0.0000' },
+      { label: 'MOQ tier 3 — quantity',                                                       fill: true, format: '#,##0' },
+      { label: 'MOQ tier 3 — piece price',                                                    fill: true, format: '$#,##0.0000' }
+    ]
+  },
+  {
+    name: 'Commercial terms',
+    questions: [
+      { label: 'Quote validity (days)',     help: 'How long this quote remains valid.', fill: true, format: '0' },
+      { label: 'Payment terms',             help: 'e.g. Net 30, 50% deposit + balance on shipment, T/T 30 days.', fill: true },
+      { label: 'Freight terms (Incoterm)',  help: 'EXW (factory), FOB (origin port), CIF (dest. port), DDP (delivered duty paid).', fill: true },
+      { label: 'Notes / assumptions',       help: 'Anything we should know — exceptions, alternative proposals, clarifications.', fill: true }
+    ]
+  }
+];
+
+function exportRFQTemplate(partsJson) {
+  try {
+    const parts = JSON.parse(partsJson);
+    if (!parts || parts.length === 0) throw new Error('Select at least one part to include in the RFQ.');
+
+    const scriptProps = PropertiesService.getScriptProperties();
+    const folderId = scriptProps.getProperty('EXPORT_FOLDER_ID');
+    const today = Utilities.formatDate(new Date(), 'America/Chicago', 'yyyy-MM-dd');
+    const filename = 'RFQ_Vendor_Template_' + parts.length + '_part' + (parts.length === 1 ? '' : 's') + '_' + today;
+
+    const ss = SpreadsheetApp.create(filename);
+    if (folderId) {
+      try {
+        const folder = DriveApp.getFolderById(folderId);
+        const file = DriveApp.getFileById(ss.getId());
+        folder.addFile(file);
+        DriveApp.getRootFolder().removeFile(file);
+      } catch (e) {
+        Logger.log('EXPORT_FOLDER_ID unusable, leaving in My Drive: ' + e.message);
+      }
+    }
+
+    const sheet = ss.getActiveSheet();
+    sheet.setName('Vendor RFQ');
+    sheet.clear();
+    sheet.setHiddenGridlines(true);
+
+    // Brand colors
+    const C_HEADER_BG   = '#1E4D2B';  // Base Power green
+    const C_HEADER_FG   = '#FFFFFF';
+    const C_SUBTITLE_FG = '#D6F0B4';
+    const C_SECTION_BG  = '#D6F0B4';
+    const C_SECTION_FG  = '#1E4D2B';
+    const C_FILL_BG     = '#FFF6D9';  // soft yellow — vendor fills here
+    const C_HELP_FG     = '#666666';
+    const C_BORDER      = '#DDDDDD';
+
+    const lastCol = 2 + parts.length;
+    let row = 1;
+
+    // Title
+    sheet.getRange(row, 1, 1, lastCol).merge()
+      .setValue('Should Cost RFQ — Vendor Response')
+      .setBackground(C_HEADER_BG).setFontColor(C_HEADER_FG)
+      .setFontSize(18).setFontWeight('bold')
+      .setHorizontalAlignment('center').setVerticalAlignment('middle');
+    sheet.setRowHeight(row++, 44);
+
+    // Subtitle
+    sheet.getRange(row, 1, 1, lastCol).merge()
+      .setValue('Generated ' + Utilities.formatDate(new Date(), 'America/Chicago', 'MMMM d, yyyy') + ' · ' + parts.length + ' part' + (parts.length === 1 ? '' : 's') + ' included')
+      .setBackground(C_HEADER_BG).setFontColor(C_SUBTITLE_FG)
+      .setFontSize(11).setHorizontalAlignment('center');
+    sheet.setRowHeight(row++, 22);
+
+    // Vendor information section (vendor fills five fields up top)
+    sheet.getRange(row, 1, 1, lastCol).merge()
+      .setValue('VENDOR INFORMATION')
+      .setBackground(C_SECTION_BG).setFontColor(C_SECTION_FG)
+      .setFontWeight('bold').setFontSize(11)
+      .setHorizontalAlignment('left').setVerticalAlignment('middle');
+    sheet.setRowHeight(row++, 26);
+
+    ['Vendor company name', 'Contact name', 'Contact email', 'Quote reference / RFQ #', 'Quote date'].forEach(function(label) {
+      sheet.getRange(row, 1).setValue(label).setFontWeight('bold').setVerticalAlignment('middle');
+      sheet.getRange(row, 2, 1, lastCol - 1).merge()
+        .setBackground(C_FILL_BG)
+        .setBorder(true, true, true, true, false, false, C_BORDER, SpreadsheetApp.BorderStyle.SOLID);
+      sheet.setRowHeight(row++, 22);
+    });
+
+    // Spacer
+    sheet.setRowHeight(row++, 12);
+
+    // Instructions
+    sheet.getRange(row, 1, 1, lastCol).merge()
+      .setValue('Highlighted cells are for you to fill. Pre-filled cells (white) show our part spec and requirements. If you propose any deviations — different resin grade, different tooling approach, family vs. dedicated tools — please note them in the Notes / assumptions row at the bottom of each part column.')
+      .setFontStyle('italic').setFontColor(C_HELP_FG)
+      .setFontSize(11).setWrap(true)
+      .setHorizontalAlignment('center').setVerticalAlignment('middle');
+    sheet.setRowHeight(row++, 48);
+
+    // Spacer
+    sheet.setRowHeight(row++, 10);
+
+    // Column header row
+    sheet.getRange(row, 1).setValue('Item');
+    sheet.getRange(row, 2).setValue('Description');
+    parts.forEach(function(p, i) {
+      const head = (p.partNumber || 'Part ' + (i + 1)) + (p.partName ? '\n' + p.partName : '');
+      sheet.getRange(row, 3 + i).setValue(head);
+    });
+    sheet.getRange(row, 1, 1, lastCol)
+      .setBackground(C_HEADER_BG).setFontColor(C_HEADER_FG).setFontWeight('bold')
+      .setHorizontalAlignment('center').setVerticalAlignment('middle').setWrap(true);
+    sheet.setRowHeight(row, 44);
+    sheet.setFrozenRows(row);
+    row++;
+
+    // Per-section question rows
+    RFQ_SECTIONS_.forEach(function(section) {
+      sheet.getRange(row, 1, 1, lastCol).merge()
+        .setValue(section.name)
+        .setBackground(C_SECTION_BG).setFontColor(C_SECTION_FG)
+        .setFontWeight('bold').setFontSize(11)
+        .setHorizontalAlignment('left').setVerticalAlignment('middle');
+      sheet.setRowHeight(row++, 28);
+
+      section.questions.forEach(function(q) {
+        sheet.getRange(row, 1).setValue(q.label)
+          .setFontWeight('bold').setVerticalAlignment('middle').setWrap(true);
+        sheet.getRange(row, 2).setValue(q.help || '')
+          .setFontColor(C_HELP_FG).setFontStyle('italic').setFontSize(10)
+          .setWrap(true).setVerticalAlignment('middle');
+        parts.forEach(function(p, i) {
+          const cell = sheet.getRange(row, 3 + i);
+          if (q.value) {
+            try {
+              const v = q.value(p);
+              if (v !== undefined && v !== null && v !== '') cell.setValue(v);
+            } catch (e) {}
+          }
+          cell.setBackground(q.fill ? C_FILL_BG : '#FFFFFF');
+          if (q.format) cell.setNumberFormat(q.format);
+          cell.setHorizontalAlignment('center').setVerticalAlignment('middle');
+          cell.setBorder(true, true, true, true, false, false, C_BORDER, SpreadsheetApp.BorderStyle.SOLID);
+        });
+        sheet.setRowHeight(row++, 26);
+      });
+
+      // Blank row between sections
+      sheet.setRowHeight(row++, 10);
+    });
+
+    // Column widths
+    sheet.setColumnWidth(1, 240);
+    sheet.setColumnWidth(2, 360);
+    parts.forEach(function(p, i) { sheet.setColumnWidth(3 + i, 180); });
+    sheet.setFrozenColumns(2);
+
+    return ss.getUrl();
+  } catch (e) {
+    Logger.log('exportRFQTemplate error: ' + e.message);
+    throw e;
+  }
+}
